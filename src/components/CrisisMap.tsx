@@ -3,6 +3,7 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Incident, Resource, ExternalEvent, MatchRecommendation, Priority, Category, PRIORITY_CONFIG } from '../types';
 import { MAP_STYLE } from '../utils/constants';
+import { calculateDistance, getFacilityPurpose } from '../services/emergencyPlacesService';
 
 interface CrisisMapProps {
   incidents: Incident[];
@@ -28,12 +29,15 @@ export function CrisisMap({
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const userMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const popupRef = useRef<maplibregl.Popup | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const incidentsRef = useRef(incidents);
   const onSelectRef = useRef(onSelectIncident);
+  const userLocationRef = useRef(userLocation);
 
   incidentsRef.current = incidents;
   onSelectRef.current = onSelectIncident;
+  userLocationRef.current = userLocation;
 
   useEffect(() => {
     if (map.current || !mapContainer.current) return;
@@ -76,7 +80,7 @@ export function CrisisMap({
         data: { type: 'FeatureCollection', features: [] }
       });
 
-      // 1. External Global Disaster Feeds
+      // Global Hazard Feeds
       map.current!.addLayer({
         id: 'events-layer',
         type: 'circle',
@@ -89,7 +93,7 @@ export function CrisisMap({
         }
       });
 
-      // 2. Incident Clusters
+      // Incidents Layer
       map.current!.addLayer({
         id: 'clusters',
         type: 'circle',
@@ -129,14 +133,14 @@ export function CrisisMap({
         }
       });
 
-      // 3. Emergency Facilities Layer (Hospitals, Nursing Homes, Police, Fire)
+      // Emergency Facilities Layer
       map.current!.addLayer({
         id: 'resources-layer',
         type: 'circle',
         source: 'resources',
         paint: {
           'circle-color': '#10b981',
-          'circle-radius': 8,
+          'circle-radius': 9,
           'circle-stroke-width': 2.5,
           'circle-stroke-color': '#ffffff'
         }
@@ -160,7 +164,7 @@ export function CrisisMap({
         }
       });
 
-      // 4. Dispatch Match Lines
+      // Matches Line Layer
       map.current!.addLayer({
         id: 'matches-layer',
         type: 'line',
@@ -172,11 +176,53 @@ export function CrisisMap({
         }
       });
 
+      // Interactive Click on Facility -> Shows Purpose & Distance
+      map.current!.on('click', 'resources-layer', (e) => {
+        if (!e.features || !e.features[0]) return;
+        const feature = e.features[0];
+        const props = feature.properties as any;
+        const coordinates = (feature.geometry as any).coordinates.slice();
+
+        const uLoc = userLocationRef.current;
+        const distText = uLoc
+          ? `${calculateDistance(uLoc[1], uLoc[0], coordinates[1], coordinates[0])} km from your GPS location`
+          : 'Location distance computing...';
+
+        const guide = getFacilityPurpose('hospital', props.name);
+
+        const popupContent = `
+          <div style="padding: 12px; font-family: sans-serif; color: #111827; max-width: 260px;">
+            <div style="font-weight: bold; font-size: 14px; margin-bottom: 4px; color: #0f172a;">${props.name}</div>
+            <div style="font-size: 11px; font-weight: 600; color: #059669; margin-bottom: 6px;">📍 ${distText}</div>
+            <div style="font-size: 12px; color: #334155; line-height: 1.35; margin-bottom: 8px; background: #f1f5f9; padding: 6px; border-radius: 6px;">
+              <strong>What to use for:</strong><br/>${guide.purpose}
+            </div>
+            <div style="display: flex; gap: 6px; margin-top: 8px;">
+              <a href="tel:${props.phone || '112'}" style="flex: 1; text-align: center; background: #10b981; color: white; padding: 6px 8px; border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: bold;">📞 Call</a>
+              <a href="https://www.google.com/maps/dir/?api=1&destination=${coordinates[1]},${coordinates[0]}" target="_blank" rel="noopener noreferrer" style="flex: 1; text-align: center; background: #3b82f6; color: white; padding: 6px 8px; border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: bold;">🧭 Route</a>
+            </div>
+          </div>
+        `;
+
+        if (popupRef.current) popupRef.current.remove();
+        popupRef.current = new maplibregl.Popup({ offset: 12 })
+          .setLngLat(coordinates)
+          .setHTML(popupContent)
+          .addTo(map.current!);
+      });
+
       map.current!.on('click', 'unclustered-point', (e) => {
         const feature = e.features![0];
         const incidentId = feature.properties!.id;
         const incident = incidentsRef.current.find(i => i.id === incidentId);
         if (incident) onSelectRef.current(incident);
+      });
+
+      map.current!.on('mouseenter', 'resources-layer', () => {
+        map.current!.getCanvas().style.cursor = 'pointer';
+      });
+      map.current!.on('mouseleave', 'resources-layer', () => {
+        map.current!.getCanvas().style.cursor = '';
       });
     });
 
@@ -185,7 +231,7 @@ export function CrisisMap({
     };
   }, []);
 
-  // Center camera directly into user location with zoom level 13
+  // Fly directly to user's location
   useEffect(() => {
     if (!map.current || !userLocation) return;
 
@@ -240,7 +286,7 @@ export function CrisisMap({
     if (!mapLoaded || !map.current) return;
     const resourceFeatures = resources.map(r => ({
       type: 'Feature' as const,
-      properties: { id: r.id, name: r.name },
+      properties: { id: r.id, name: r.name, phone: r.phone || '112' },
       geometry: { type: 'Point' as const, coordinates: [r.lng, r.lat] }
     }));
 
