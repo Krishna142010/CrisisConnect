@@ -1,15 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Incident, TriageResult } from '../types';
 import { triageReport, getAIMode } from '../services/triageService';
+import { DEFAULT_CENTER } from '../utils/constants';
 
 interface ReportModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (incident: Incident) => void;
   aiModelLoaded: boolean;
+  userLat?: number | null;
+  userLng?: number | null;
 }
 
-export function ReportModal({ isOpen, onClose, onSubmit, aiModelLoaded }: ReportModalProps) {
+export function ReportModal({
+  isOpen,
+  onClose,
+  onSubmit,
+  aiModelLoaded,
+  userLat: initialLat,
+  userLng: initialLng
+}: ReportModalProps) {
   const [reportText, setReportText] = useState('');
   const [isTriaging, setIsTriaging] = useState(false);
   const [triageResult, setTriageResult] = useState<TriageResult | null>(null);
@@ -18,14 +28,32 @@ export function ReportModal({ isOpen, onClose, onSubmit, aiModelLoaded }: Report
   const [manualLng, setManualLng] = useState('');
   const [locationName, setLocationName] = useState('');
   const [step, setStep] = useState<'input' | 'review' | 'submitted'>('input');
-  const [userLat, setUserLat] = useState<number | null>(null);
-  const [userLng, setUserLng] = useState<number | null>(null);
+  const [userLat, setUserLat] = useState<number | null>(initialLat ?? null);
+  const [userLng, setUserLng] = useState<number | null>(initialLng ?? null);
   const [geoStatus, setGeoStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+
+  // Sync with coordinates resolved by App.tsx
+  useEffect(() => {
+    if (initialLat && initialLng) {
+      setUserLat(initialLat);
+      setUserLng(initialLng);
+      setGeoStatus('success');
+    }
+  }, [initialLat, initialLng]);
 
   if (!isOpen) return null;
 
   const handleGetLocation = () => {
     setUseMyLocation(true);
+
+    // Use already resolved coordinates if available
+    if (initialLat && initialLng) {
+      setUserLat(initialLat);
+      setUserLng(initialLng);
+      setGeoStatus('success');
+      return;
+    }
+
     setGeoStatus('loading');
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
@@ -34,19 +62,27 @@ export function ReportModal({ isOpen, onClose, onSubmit, aiModelLoaded }: Report
           setUserLng(position.coords.longitude);
           setGeoStatus('success');
         },
-        (err) => {
-          console.error('Geolocation error:', err);
+        async (err) => {
+          console.warn('GPS failed in modal, querying IP fallback:', err.message);
+          // IP fallback instead of hardcoded coordinates
+          try {
+            const res = await fetch('https://ipwho.is/');
+            const data = await res.json();
+            if (data && data.latitude && data.longitude) {
+              setUserLat(data.latitude);
+              setUserLng(data.longitude);
+              setGeoStatus('success');
+              return;
+            }
+          } catch (e) {
+            console.error('IP fallback failed:', e);
+          }
           setGeoStatus('error');
-          // Fall back to default center
-          setUserLat(29.7604);
-          setUserLng(-95.3698);
         },
-        { enableHighAccuracy: true, timeout: 10000 }
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
       );
     } else {
       setGeoStatus('error');
-      setUserLat(29.7604);
-      setUserLng(-95.3698);
     }
   };
 
@@ -63,16 +99,19 @@ export function ReportModal({ isOpen, onClose, onSubmit, aiModelLoaded }: Report
     }
   };
 
+  const defaultLat = typeof DEFAULT_CENTER === 'object' && 'lat' in DEFAULT_CENTER ? (DEFAULT_CENTER as any).lat : 28.58;
+  const defaultLng = typeof DEFAULT_CENTER === 'object' && 'lng' in DEFAULT_CENTER ? (DEFAULT_CENTER as any).lng : 78.57;
+
   const getLat = (): number => {
     if (useMyLocation && userLat !== null) return userLat;
-    if (!useMyLocation && manualLat) return parseFloat(manualLat) || 29.7604;
-    return 29.7604 + (Math.random() - 0.5) * 0.05;
+    if (!useMyLocation && manualLat) return parseFloat(manualLat) || defaultLat;
+    return defaultLat + (Math.random() - 0.5) * 0.01;
   };
 
   const getLng = (): number => {
     if (useMyLocation && userLng !== null) return userLng;
-    if (!useMyLocation && manualLng) return parseFloat(manualLng) || -95.3698;
-    return -95.3698 + (Math.random() - 0.5) * 0.05;
+    if (!useMyLocation && manualLng) return parseFloat(manualLng) || defaultLng;
+    return defaultLng + (Math.random() - 0.5) * 0.01;
   };
 
   const handleConfirm = () => {
@@ -95,8 +134,6 @@ export function ReportModal({ isOpen, onClose, onSubmit, aiModelLoaded }: Report
       setStep('input');
       setReportText('');
       setTriageResult(null);
-      setUserLat(null);
-      setUserLng(null);
       setGeoStatus('idle');
     }, 2000);
   };
@@ -118,7 +155,7 @@ export function ReportModal({ isOpen, onClose, onSubmit, aiModelLoaded }: Report
                   className="form-textarea"
                   value={reportText}
                   onChange={(e) => setReportText(e.target.value)}
-                  placeholder="Describe the emergency... e.g., 'Water rising fast at 123 Main St, family of 4 trapped on 2nd floor, need rescue boat'"
+                  placeholder="Describe the emergency... e.g., 'Water rising fast at Main St, family trapped on 2nd floor, need rescue boat'"
                   rows={4}
                   style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #374151', backgroundColor: '#111827', color: 'white' }}
                 />
