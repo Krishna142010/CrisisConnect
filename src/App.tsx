@@ -12,7 +12,8 @@ import { PeerChat } from './components/PeerChat';
 import { AIChatModal } from './components/AIChatModal';
 import { initializeAI, isModelLoaded, getAIMode } from './services/triageService';
 import { matchIncidentsToResources } from './services/matcherService';
-import { generateSimulatedIncident, generateSimulatedResource, generateInitialResources } from './services/simulationService';
+import { generateSimulatedIncident } from './services/simulationService';
+import { fetchAndCacheLiveFacilities } from './services/emergencyPlacesService';
 import { fetchAllExternalEvents } from './services/externalFeeds';
 import { saveIncident, getAllIncidents, saveResource, getAllResources, clearAllData } from './services/offlineDB';
 import { DEFAULT_CENTER, SIMULATION_INTERVAL_MS, SIMULATION_TOTAL_EVENTS } from './utils/constants';
@@ -70,6 +71,7 @@ export default function App() {
       setAiModelLoaded(isModelLoaded());
       setAiModelLoading(false);
 
+      // Load offline cached data on start
       const savedIncidents = await getAllIncidents();
       const savedResources = await getAllResources();
       setIncidents(savedIncidents);
@@ -147,42 +149,37 @@ export default function App() {
     };
   }, []);
 
-  // Auto-seed and refresh emergency facilities strictly within 2-10km of user coordinates
+  // Fetch real OpenStreetMap hospitals/emergency facilities & cache for offline usage
   useEffect(() => {
     if (userLat === null || userLng === null) return;
 
-    const seedLocalArea = async () => {
-      const savedResources = await getAllResources();
-      
-      const isOutOfRange = savedResources.length === 0 || savedResources.some(r => {
-        const distKm = Math.hypot(r.lat - userLat, r.lng - userLng) * 111;
-        return distKm > 30;
-      });
+    const loadLocalEmergencyData = async () => {
+      try {
+        // 1. Fetch real hospitals, nursing homes, fire, police via OpenStreetMap Overpass API
+        const facilities = await fetchAndCacheLiveFacilities(userLat, userLng, 10000);
+        setResources(facilities);
 
-      if (isOutOfRange) {
-        await clearAllData();
-
-        // 1. Generate 8 local emergency facilities (2 to 10 km away)
-        const localResources = generateInitialResources({ lat: userLat, lng: userLng }, 8);
-        for (const r of localResources) {
-          await saveResource(r);
+        // 2. Generate initial local incidents if empty
+        const currentIncidents = await getAllIncidents();
+        if (currentIncidents.length === 0) {
+          const initialIncidents = [
+            generateSimulatedIncident({ lat: userLat, lng: userLng }),
+            generateSimulatedIncident({ lat: userLat, lng: userLng }),
+            generateSimulatedIncident({ lat: userLat, lng: userLng })
+          ];
+          for (const inc of initialIncidents) {
+            await saveIncident(inc);
+          }
+          setIncidents(initialIncidents);
         }
-        setResources(localResources);
-
-        // 2. Generate 3 localized active incidents (1 to 6 km away)
-        const localIncidents = [
-          generateSimulatedIncident({ lat: userLat, lng: userLng }),
-          generateSimulatedIncident({ lat: userLat, lng: userLng }),
-          generateSimulatedIncident({ lat: userLat, lng: userLng })
-        ];
-        for (const inc of localIncidents) {
-          await saveIncident(inc);
-        }
-        setIncidents(localIncidents);
+      } catch (err) {
+        console.warn('Could not sync live OpenStreetMap data, loading cached resources:', err);
+        const cached = await getAllResources();
+        setResources(cached);
       }
     };
 
-    seedLocalArea();
+    loadLocalEmergencyData();
   }, [userLat, userLng]);
 
   useEffect(() => {
@@ -239,9 +236,8 @@ export default function App() {
     handleStopSimulation();
     await clearAllData();
     setIncidents([]);
-    const initialResources = generateInitialResources(currentCenter as any, 8);
-    initialResources.forEach(r => saveResource(r));
-    setResources(initialResources);
+    const facilities = await fetchAndCacheLiveFacilities(currentCenter.lat, currentCenter.lng, 10000);
+    setResources(facilities);
     setMatches([]);
     setSelectedIncident(null);
   }, [handleStopSimulation, currentCenter]);
