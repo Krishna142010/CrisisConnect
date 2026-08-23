@@ -73,14 +73,7 @@ export default function App() {
       const savedIncidents = await getAllIncidents();
       const savedResources = await getAllResources();
       setIncidents(savedIncidents);
-      
-      if (savedResources.length === 0) {
-        const initialResources = generateInitialResources(currentCenter as any, 15);
-        initialResources.forEach(r => saveResource(r));
-        setResources(initialResources);
-      } else {
-        setResources(savedResources);
-      }
+      setResources(savedResources);
 
       if (navigator.onLine) {
         try {
@@ -154,6 +147,44 @@ export default function App() {
     };
   }, []);
 
+  // Auto-seed and refresh emergency facilities strictly within 2-10km of user coordinates
+  useEffect(() => {
+    if (userLat === null || userLng === null) return;
+
+    const seedLocalArea = async () => {
+      const savedResources = await getAllResources();
+      
+      const isOutOfRange = savedResources.length === 0 || savedResources.some(r => {
+        const distKm = Math.hypot(r.lat - userLat, r.lng - userLng) * 111;
+        return distKm > 30;
+      });
+
+      if (isOutOfRange) {
+        await clearAllData();
+
+        // 1. Generate 8 local emergency facilities (2 to 10 km away)
+        const localResources = generateInitialResources({ lat: userLat, lng: userLng }, 8);
+        for (const r of localResources) {
+          await saveResource(r);
+        }
+        setResources(localResources);
+
+        // 2. Generate 3 localized active incidents (1 to 6 km away)
+        const localIncidents = [
+          generateSimulatedIncident({ lat: userLat, lng: userLng }),
+          generateSimulatedIncident({ lat: userLat, lng: userLng }),
+          generateSimulatedIncident({ lat: userLat, lng: userLng })
+        ];
+        for (const inc of localIncidents) {
+          await saveIncident(inc);
+        }
+        setIncidents(localIncidents);
+      }
+    };
+
+    seedLocalArea();
+  }, [userLat, userLng]);
+
   useEffect(() => {
     const newMatches = matchIncidentsToResources(incidents.filter(i => i.status === 'ACTIVE'), resources);
     setMatches(newMatches);
@@ -208,7 +239,7 @@ export default function App() {
     handleStopSimulation();
     await clearAllData();
     setIncidents([]);
-    const initialResources = generateInitialResources(currentCenter as any, 15);
+    const initialResources = generateInitialResources(currentCenter as any, 8);
     initialResources.forEach(r => saveResource(r));
     setResources(initialResources);
     setMatches([]);
@@ -259,12 +290,12 @@ export default function App() {
         
         {activeTab === 'resources' && (
           <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
-            <h2 className="accent-text" style={{ marginBottom: '16px', color: 'white' }}>Active Volunteers & Resources</h2>
+            <h2 className="accent-text" style={{ marginBottom: '16px', color: 'white' }}>Active Volunteers & Emergency Facilities</h2>
             <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
               {resources.filter(r => r.isActive).map(resource => (
                 <div key={resource.id} className="glass-card" style={{ padding: '16px', borderRadius: '8px', backgroundColor: '#1f2937' }}>
                   <div className="resource-card" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                    <div className="resource-avatar" style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold' }}>
+                    <div className="resource-avatar" style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold' }}>
                       {resource.name.charAt(0)}
                     </div>
                     <div>
@@ -277,7 +308,7 @@ export default function App() {
                         ))}
                       </div>
                       <div className="text-muted text-sm" style={{ color: '#9ca3af', fontSize: '0.8rem', marginTop: '4px' }}>
-                        Capacity: {resource.capacityRemaining}
+                        Capacity: {resource.capacityRemaining} Available
                       </div>
                     </div>
                   </div>
@@ -300,18 +331,29 @@ export default function App() {
         )}
       </div>
       
-      {/* Action Buttons (Bottom Right) */}
-      <div style={{ position: 'fixed', bottom: '24px', right: '24px', display: 'flex', flexDirection: 'column', gap: '12px', zIndex: 100 }}>
-        {/* AI Assistant Button */}
+      {/* ── Fixed Floating Action Button Stack (Bottom Right) ── */}
+      <div 
+        style={{ 
+          position: 'fixed', 
+          bottom: '24px', 
+          right: '24px', 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center',
+          gap: '12px', 
+          zIndex: 999 
+        }}
+      >
+        {/* 1. AI Assistant Button */}
         <button
           onClick={() => setIsAIChatOpen(true)}
-          title="Talk with AI Copilot"
-          style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#8b5cf6', color: 'white', fontSize: '20px', border: 'none', boxShadow: '0 4px 12px rgba(139, 92, 246, 0.4)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          title="Talk with AI Assistant"
+          style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#8b5cf6', color: 'white', fontSize: '22px', border: 'none', boxShadow: '0 4px 12px rgba(139, 92, 246, 0.4)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
           🤖
         </button>
 
-        {/* Bluetooth Mesh Chat Button */}
+        {/* 2. Bluetooth Mesh Chat Button */}
         <button
           onClick={() => setIsPeerChatOpen(true)}
           title="Bluetooth Mesh Chat"
@@ -320,21 +362,35 @@ export default function App() {
           📡
         </button>
 
-        {/* Emergency Numbers Button */}
+        {/* 3. Emergency Numbers & Facilities Button */}
         <button
           onClick={() => setIsEmergencyNumbersOpen(true)}
-          title="Emergency Numbers"
+          title="Emergency Helplines & Nearby Centers"
           style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#22c55e', color: 'white', fontSize: '20px', border: 'none', boxShadow: '0 4px 12px rgba(34, 197, 94, 0.4)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
           📞
         </button>
 
-        {/* SOS Emergency Report Button */}
+        {/* 4. SOS Emergency Report Button */}
         <button 
-          className="sos-button" 
           onClick={() => setIsReportModalOpen(true)} 
           title="Report Emergency"
-          style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: '#ef4444', color: 'white', fontSize: '24px', border: 'none', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)', cursor: 'pointer' }}
+          style={{ 
+            position: 'relative',
+            width: '60px', 
+            height: '60px', 
+            borderRadius: '50%', 
+            backgroundColor: '#ef4444', 
+            color: 'white', 
+            fontSize: '22px', 
+            fontWeight: 'bold',
+            border: 'none', 
+            boxShadow: '0 0 16px rgba(239, 68, 68, 0.7)', 
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
         >
           🆘
         </button>
