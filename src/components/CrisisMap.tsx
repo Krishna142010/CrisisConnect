@@ -3,7 +3,7 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Incident, Resource, ExternalEvent, MatchRecommendation, Priority, Category, PRIORITY_CONFIG } from '../types';
 import { MAP_STYLE } from '../utils/constants';
-import { calculateDistance, getFacilityPurpose } from '../services/emergencyPlacesService';
+import { calculateDistance, getFacilityPurpose, WORLD_EMERGENCY_HUBS } from '../services/emergencyPlacesService';
 
 interface CrisisMapProps {
   incidents: Incident[];
@@ -49,7 +49,7 @@ export function CrisisMap({
       container: mapContainer.current,
       style: MAP_STYLE,
       center: [initialLng, initialLat],
-      zoom: 13
+      zoom: 12
     });
 
     map.current.addControl(new maplibregl.NavigationControl(), 'top-right');
@@ -93,7 +93,7 @@ export function CrisisMap({
         }
       });
 
-      // Incidents Layer
+      // Incident Clusters & Points
       map.current!.addLayer({
         id: 'clusters',
         type: 'circle',
@@ -133,14 +133,14 @@ export function CrisisMap({
         }
       });
 
-      // Emergency Facilities Layer
+      // Emergency Facilities & World Hubs Layer
       map.current!.addLayer({
         id: 'resources-layer',
         type: 'circle',
         source: 'resources',
         paint: {
           'circle-color': '#10b981',
-          'circle-radius': 9,
+          'circle-radius': 8,
           'circle-stroke-width': 2.5,
           'circle-stroke-color': '#ffffff'
         }
@@ -176,7 +176,7 @@ export function CrisisMap({
         }
       });
 
-      // Interactive Click on Facility -> Shows Purpose & Distance
+      // Interactive Click/Touch on Facility: Displays Purpose, Capabilities & Live GPS Distance
       map.current!.on('click', 'resources-layer', (e) => {
         if (!e.features || !e.features[0]) return;
         const feature = e.features[0];
@@ -186,18 +186,21 @@ export function CrisisMap({
         const uLoc = userLocationRef.current;
         const distText = uLoc
           ? `${calculateDistance(uLoc[1], uLoc[0], coordinates[1], coordinates[0])} km from your GPS location`
-          : 'Location distance computing...';
+          : 'Calculating GPS distance...';
 
-        const guide = getFacilityPurpose('hospital', props.name);
+        // Check if facility is a registered global hub for custom description
+        const matchedHub = WORLD_EMERGENCY_HUBS.find(h => h.name === props.name);
+        const purposeText = matchedHub ? matchedHub.purpose : getFacilityPurpose('hospital', props.name).purpose;
 
         const popupContent = `
-          <div style="padding: 12px; font-family: sans-serif; color: #111827; max-width: 260px;">
-            <div style="font-weight: bold; font-size: 14px; margin-bottom: 4px; color: #0f172a;">${props.name}</div>
-            <div style="font-size: 11px; font-weight: 600; color: #059669; margin-bottom: 6px;">📍 ${distText}</div>
-            <div style="font-size: 12px; color: #334155; line-height: 1.35; margin-bottom: 8px; background: #f1f5f9; padding: 6px; border-radius: 6px;">
-              <strong>What to use for:</strong><br/>${guide.purpose}
+          <div style="padding: 12px; font-family: sans-serif; color: #111827; max-width: 280px;">
+            <div style="font-weight: bold; font-size: 14px; margin-bottom: 3px; color: #0f172a;">${props.name}</div>
+            <div style="font-size: 11px; font-weight: 700; color: #059669; margin-bottom: 6px;">📍 ${distText}</div>
+            <div style="font-size: 12px; color: #334155; line-height: 1.35; margin-bottom: 8px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 7px; border-radius: 6px;">
+              <strong style="color: #4f46e5;">What to use this for:</strong><br/>
+              ${purposeText}
             </div>
-            <div style="display: flex; gap: 6px; margin-top: 8px;">
+            <div style="display: flex; gap: 6px; margin-top: 6px;">
               <a href="tel:${props.phone || '112'}" style="flex: 1; text-align: center; background: #10b981; color: white; padding: 6px 8px; border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: bold;">📞 Call</a>
               <a href="https://www.google.com/maps/dir/?api=1&destination=${coordinates[1]},${coordinates[0]}" target="_blank" rel="noopener noreferrer" style="flex: 1; text-align: center; background: #3b82f6; color: white; padding: 6px 8px; border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: bold;">🧭 Route</a>
             </div>
@@ -231,7 +234,7 @@ export function CrisisMap({
     };
   }, []);
 
-  // Fly directly to user's location
+  // Update or attach user location beacon
   useEffect(() => {
     if (!map.current || !userLocation) return;
 
@@ -250,12 +253,6 @@ export function CrisisMap({
     } else {
       userMarkerRef.current.setLngLat(userLocation);
     }
-
-    map.current.flyTo({
-      center: userLocation,
-      zoom: 13,
-      essential: true
-    });
   }, [userLocation, mapLoaded]);
 
   useEffect(() => {
