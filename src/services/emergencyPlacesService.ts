@@ -28,7 +28,6 @@ export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2
   return parseFloat((R * c).toFixed(1));
 }
 
-// In-memory cache for reverse geocoding to prevent repeat requests
 const locationNameCache = new Map<string, string>();
 
 /**
@@ -48,11 +47,11 @@ export async function getReverseGeocodedLocation(lat: number, lng: number): Prom
     if (data && data.address) {
       const addr = data.address;
       const locality =
+        addr.city ||
+        addr.town ||
+        addr.village ||
         addr.suburb ||
         addr.neighbourhood ||
-        addr.village ||
-        addr.town ||
-        addr.city ||
         addr.county ||
         'Local Area';
       const stateOrCountry = addr.state || addr.country || '';
@@ -64,13 +63,70 @@ export async function getReverseGeocodedLocation(lat: number, lng: number): Prom
     console.warn('Reverse geocoding network error, using coordinate label:', e);
   }
 
-  const fallback = `Zone (${lat.toFixed(3)}, ${lng.toFixed(3)})`;
+  const fallback = `Lat: ${lat.toFixed(3)}, Lng: ${lng.toFixed(3)}`;
   locationNameCache.set(key, fallback);
   return fallback;
 }
 
-// Comprehensive Global Network: Africa, Gulf, Central Asia, South Asia, Europe, Americas, APAC
+// Global Hubs across ALL continents including Americas & NYC
 export const WORLD_EMERGENCY_HUBS = [
+  // ── NORTH AMERICA & NYC ──
+  {
+    id: 'hub-nyc-bellevue',
+    name: 'NYC Health + Hospitals / Bellevue Trauma Center',
+    type: 'hospital' as const,
+    lat: 40.7390,
+    lng: -73.9760,
+    address: 'New York City, NY, USA',
+    phone: '+12125624141',
+    purpose: 'New York’s flagship Level 1 Trauma Center. Emergency surgery, disaster medical response, hyperbaric medicine, and psychiatric crisis care.',
+    capabilities: ['Level 1 Trauma', 'Disaster Medicine', 'Emergency Surgery', 'ICU']
+  },
+  {
+    id: 'hub-nyc-nyp',
+    name: 'NewYork-Presbyterian / Weill Cornell Medical Center',
+    type: 'hospital' as const,
+    lat: 40.7650,
+    lng: -73.9540,
+    address: 'New York City, NY, USA',
+    phone: '+12127465454',
+    purpose: 'Premier Level 1 Adult & Pediatric Trauma Center and regional Burn Center for the Greater New York Area.',
+    capabilities: ['Burn Center', 'Pediatric Trauma', 'Cardiac Emergency']
+  },
+  {
+    id: 'hub-nyc-mountsinai',
+    name: 'Mount Sinai Hospital Emergency Department',
+    type: 'hospital' as const,
+    lat: 40.7900,
+    lng: -73.9530,
+    address: 'New York City, NY, USA',
+    phone: '+12122416500',
+    purpose: 'Comprehensive emergency stroke, cardiac catheterization, and specialized acute medical care center.',
+    capabilities: ['Stroke Rescue', 'Cardiac Catheterization', 'Emergency Care']
+  },
+  {
+    id: 'hub-hopkins-baltimore',
+    name: 'Johns Hopkins Critical Event Preparedness & Response',
+    type: 'hospital' as const,
+    lat: 39.2965,
+    lng: -76.5927,
+    address: 'Baltimore, MD, USA',
+    phone: '+14109555000',
+    purpose: 'National disaster medical command, chemical & biological event containment, and tertiary critical trauma surgery.',
+    capabilities: ['Disaster Medicine', 'Biological Containment', 'Tertiary Trauma']
+  },
+  {
+    id: 'hub-toronto-general',
+    name: 'Toronto General Hospital Emergency Trauma Unit',
+    type: 'hospital' as const,
+    lat: 43.6590,
+    lng: -79.3890,
+    address: 'Toronto, ON, Canada',
+    phone: '+14163404800',
+    purpose: 'Canada’s leading organ transplant and complex surgical emergency resuscitation hub.',
+    capabilities: ['Complex Trauma', 'Organ Care', 'Critical Resuscitation']
+  },
+
   // ── AFRICA ──
   {
     id: 'hub-cairo-qasr',
@@ -80,7 +136,7 @@ export const WORLD_EMERGENCY_HUBS = [
     lng: 31.2285,
     address: 'Cairo, Egypt (North Africa)',
     phone: '+20223654060',
-    purpose: 'Largest tertiary emergency trauma hospital in North Africa. Best for major trauma surgery, toxicological emergencies, burn treatment, and intensive care.',
+    purpose: 'Largest tertiary emergency trauma hospital in North Africa. Best for major trauma surgery, toxicological emergencies, and ICU.',
     capabilities: ['Major Trauma', 'Toxicology', 'Emergency Surgery', 'ICU']
   },
   {
@@ -91,8 +147,8 @@ export const WORLD_EMERGENCY_HUBS = [
     lng: 36.8065,
     address: 'Nairobi, Kenya (East Africa)',
     phone: '+254202726300',
-    purpose: 'Apex Level 1 referral hospital for East & Central Africa. Use for multi-casualty disaster response, emergency neurosurgery, and specialized infectious disease isolation.',
-    capabilities: ['Level 1 Trauma', 'Disaster Response', 'Neurosurgery', 'Isolation Care']
+    purpose: 'Apex Level 1 referral hospital for East & Central Africa. Multi-casualty disaster response and neurosurgery.',
+    capabilities: ['Level 1 Trauma', 'Disaster Response', 'Neurosurgery']
   },
   {
     id: 'hub-joburg-bara',
@@ -100,57 +156,13 @@ export const WORLD_EMERGENCY_HUBS = [
     type: 'hospital' as const,
     lat: -26.2605,
     lng: 27.9435,
-    address: 'Johannesburg, South Africa (Southern Africa)',
+    address: 'Johannesburg, South Africa',
     phone: '+27119338000',
-    purpose: 'One of the largest hospitals in the world. High-volume Level 1 trauma resuscitation, acute penetrating injuries, disaster triage, and severe burn ICU.',
-    capabilities: ['Mass Casualty Triage', 'Polytrauma', 'Burn Center', 'Blood Bank']
-  },
-  {
-    id: 'hub-abuja-national',
-    name: 'National Hospital Abuja Emergency Centre',
-    type: 'hospital' as const,
-    lat: 9.0435,
-    lng: 7.4832,
-    address: 'Abuja, Nigeria (West Africa)',
-    phone: '+23492344074',
-    purpose: 'Premier medical hub for West Africa. Equipped for national disaster mobilization, acute cardiac emergencies, and radiological decontamination.',
-    capabilities: ['National Disaster Care', 'Cardiology', 'Emergency Surgery']
-  },
-  {
-    id: 'hub-addis-blacklion',
-    name: 'Tikur Anbessa (Black Lion) Specialized Hospital',
-    type: 'hospital' as const,
-    lat: 9.0185,
-    lng: 38.7512,
-    address: 'Addis Ababa, Ethiopia (Horn of Africa)',
-    phone: '+251115511211',
-    purpose: 'Main emergency referral center for the Horn of Africa. Use for severe polytrauma, emergency obstetrics, and disaster epidemic control.',
-    capabilities: ['Polytrauma', 'Emergency Surgery', 'Epidemic Control']
-  },
-  {
-    id: 'hub-rabat-ibnsina',
-    name: 'Ibn Sina University Hospital Trauma Center',
-    type: 'hospital' as const,
-    lat: 33.9842,
-    lng: -6.8521,
-    address: 'Rabat, Morocco (Northwest Africa)',
-    phone: '+212537671010',
-    purpose: 'Maghreb region apex medical facility. Specialized in earthquake injury response, vascular trauma, and rapid helicopter triage.',
-    capabilities: ['Earthquake Trauma', 'Vascular Surgery', 'Air Ambulance']
+    purpose: 'High-volume Level 1 trauma resuscitation, acute penetrating injuries, disaster triage, and severe burn ICU.',
+    capabilities: ['Mass Casualty Triage', 'Polytrauma', 'Burn Center']
   },
 
   // ── GULF & MIDDLE EAST ──
-  {
-    id: 'hub-riyadh-kfsh',
-    name: 'King Faisal Specialist Hospital & Emergency Center',
-    type: 'hospital' as const,
-    lat: 24.6712,
-    lng: 46.6755,
-    address: 'Riyadh, Saudi Arabia',
-    phone: '+966114647272',
-    purpose: 'State-of-the-art tertiary medical center. Critical care for chemical hazards, advanced organ failure resuscitation, and mass event emergency command.',
-    capabilities: ['Critical Care', 'Chemical Incident Care', 'Tertiary Surgery']
-  },
   {
     id: 'hub-dubai-rashid',
     name: 'Rashid Hospital Trauma & Emergency Centre',
@@ -159,63 +171,19 @@ export const WORLD_EMERGENCY_HUBS = [
     lng: 55.3262,
     address: 'Dubai, United Arab Emirates',
     phone: '+97142192000',
-    purpose: 'Premier Level 1 Trauma Center in the Gulf. Handles vehicular polytrauma, hyperbaric oxygen therapy, and international disaster airlifting.',
+    purpose: 'Premier Level 1 Trauma Center in the Gulf. Handles vehicular polytrauma, hyperbaric oxygen therapy, and international airlifting.',
     capabilities: ['Level 1 Trauma', 'Hyperbaric Therapy', 'Helicopter Dispatch']
   },
   {
-    id: 'hub-abu-dhabi-cleveland',
-    name: 'Cleveland Clinic Abu Dhabi Emergency Department',
+    id: 'hub-riyadh-kfsh',
+    name: 'King Faisal Specialist Hospital & Emergency Center',
     type: 'hospital' as const,
-    lat: 24.4985,
-    lng: 54.3895,
-    address: 'Abu Dhabi, United Arab Emirates',
-    phone: '+97180082223',
-    purpose: 'Designated chest pain and stroke emergency hub. Advanced acute coronary interventions and neurovascular rescue.',
-    capabilities: ['Stroke Rescue', 'Cardiac Catheterization', 'ICU']
-  },
-  {
-    id: 'hub-doha-hamad',
-    name: 'Hamad General Hospital & Trauma Center',
-    type: 'hospital' as const,
-    lat: 25.2895,
-    lng: 51.4985,
-    address: 'Doha, Qatar',
-    phone: '+97444392222',
-    purpose: 'Nationwide trauma coordination hub. Operates national fleet of emergency air ambulances, heavy disaster triage, and pediatric emergency services.',
-    capabilities: ['Air Ambulance', 'Pediatric Emergency', 'Disaster Command']
-  },
-  {
-    id: 'hub-kuwait-mubarak',
-    name: 'Mubarak Al-Kabeer Hospital Emergency Hub',
-    type: 'hospital' as const,
-    lat: 29.3245,
-    lng: 48.0262,
-    address: 'Jabriya, Kuwait City, Kuwait',
-    phone: '+96525312700',
-    purpose: 'Primary emergency surgical and burn treatment center for Kuwait. Equipped for acute industrial and environmental hazard response.',
-    capabilities: ['Burn Treatment', 'Emergency Surgery', 'Trauma ICU']
-  },
-  {
-    id: 'hub-muscat-squh',
-    name: 'Sultan Qaboos University Hospital Emergency Unit',
-    type: 'hospital' as const,
-    lat: 23.5932,
-    lng: 58.1725,
-    address: 'Muscat, Oman',
-    phone: '+96824141111',
-    purpose: 'National tertiary referral center for Oman. Equipped for cyclone/flood medical relief, toxicology, and acute cardiac care.',
-    capabilities: ['Disaster Relief', 'Toxicology', 'Cardiac Triage']
-  },
-  {
-    id: 'hub-tehran-imam',
-    name: 'Imam Khomeini Hospital Complex Emergency Trauma Center',
-    type: 'hospital' as const,
-    lat: 35.7025,
-    lng: 51.3805,
-    address: 'Tehran, Iran',
-    phone: '+982161190000',
-    purpose: 'Largest medical disaster hub in Iran. Specialized in earthquake mass casualties, severe crush injury treatment, and major orthopedic surgeries.',
-    capabilities: ['Earthquake Trauma', 'Crush Syndrome Care', 'Orthopedic Surgery']
+    lat: 24.6712,
+    lng: 46.6755,
+    address: 'Riyadh, Saudi Arabia',
+    phone: '+966114647272',
+    purpose: 'State-of-the-art tertiary medical center. Critical care for chemical hazards and mass event emergency command.',
+    capabilities: ['Critical Care', 'Chemical Incident Care', 'Tertiary Surgery']
   },
 
   // ── CENTRAL ASIA ──
@@ -227,8 +195,8 @@ export const WORLD_EMERGENCY_HUBS = [
     lng: 69.2805,
     address: 'Tashkent, Uzbekistan',
     phone: '+998711504600',
-    purpose: 'Apex emergency medicine headquarters for Uzbekistan. Coordinates disaster medical aviation, acute cardiac shock, and severe thermal burns.',
-    capabilities: ['Disaster Aviation', 'Burn ICU', 'Acute Stroke', 'Trauma']
+    purpose: 'Apex emergency medicine headquarters for Uzbekistan. Coordinates disaster medical aviation and acute trauma.',
+    capabilities: ['Disaster Aviation', 'Burn ICU', 'Trauma']
   },
   {
     id: 'hub-almaty-syzganov',
@@ -238,44 +206,11 @@ export const WORLD_EMERGENCY_HUBS = [
     lng: 76.9552,
     address: 'Almaty, Kazakhstan',
     phone: '+77272792216',
-    purpose: 'Central Asia apex surgical and trauma center. Specialized in complex reconstructive trauma, vascular surgery, and seismic disaster response.',
-    capabilities: ['Reconstructive Trauma', 'Vascular Surgery', 'Seismic Medicine']
-  },
-  {
-    id: 'hub-astana-nsmc',
-    name: 'National Scientific Medical Center',
-    type: 'hospital' as const,
-    lat: 51.1285,
-    lng: 71.4185,
-    address: 'Astana, Kazakhstan',
-    phone: '+77172577440',
-    purpose: 'National critical care center for northern Central Asia. Handles severe hypothermia rescue, cardio-thoracic emergencies, and ICU air transport.',
-    capabilities: ['Hypothermia Care', 'Cardio-Thoracic', 'ICU Transport']
-  },
-  {
-    id: 'hub-bishkek-national',
-    name: 'National Hospital of the Kyrgyz Republic Emergency Ward',
-    type: 'hospital' as const,
-    lat: 42.8685,
-    lng: 74.5955,
-    address: 'Bishkek, Kyrgyzstan',
-    phone: '+996312621023',
-    purpose: 'Major mountain disaster and high-altitude emergency facility. Use for severe alpine trauma, crush injuries, and mass emergency resuscitation.',
-    capabilities: ['Mountain Rescue Medicine', 'Altitude Trauma', 'Resuscitation']
-  },
-  {
-    id: 'hub-dushanbe-shifobakhsh',
-    name: 'National Medical Center "Shifobakhsh" (Qariya-i Bolo)',
-    type: 'hospital' as const,
-    lat: 38.5675,
-    lng: 68.7845,
-    address: 'Dushanbe, Tajikistan',
-    phone: '+992372353434',
-    purpose: 'Largest multi-profile emergency hospital in Tajikistan. Critical support for earthquake casualties, infectious outbreaks, and emergency pediatric surgery.',
-    capabilities: ['Mass Casualty Triage', 'Emergency Pediatrics', 'Trauma']
+    purpose: 'Central Asia apex surgical and trauma center. Specialized in reconstructive trauma and seismic disaster response.',
+    capabilities: ['Reconstructive Trauma', 'Seismic Medicine']
   },
 
-  // ── SOUTH ASIA, ASIA-PACIFIC, EUROPE & AMERICAS ──
+  // ── SOUTH ASIA, EUROPE & APAC ──
   {
     id: 'hub-aiims-delhi',
     name: 'JPN Apex Trauma Center (AIIMS New Delhi)',
@@ -284,7 +219,7 @@ export const WORLD_EMERGENCY_HUBS = [
     lng: 77.2100,
     address: 'New Delhi, India',
     phone: '+911126105740',
-    purpose: 'National Level 1 Trauma Center. Best for polytrauma accidents, neurotrauma, emergency blood bank reserves, and disaster response teams.',
+    purpose: 'National Level 1 Trauma Center. Best for polytrauma accidents, neurotrauma, and mass casualty disaster response.',
     capabilities: ['Level 1 Trauma', 'Neurosurgery', 'Blood Bank', 'ICU']
   },
   {
@@ -295,19 +230,8 @@ export const WORLD_EMERGENCY_HUBS = [
     lng: 6.1333,
     address: 'Geneva, Switzerland',
     phone: '+41227912111',
-    purpose: 'Global strategic coordination for international disease outbreaks, mass casualties, and international humanitarian relief.',
+    purpose: 'Global strategic coordination for international disease outbreaks and international humanitarian relief.',
     capabilities: ['International Relief', 'Pandemic Response', 'Disaster Command']
-  },
-  {
-    id: 'hub-tokyo-disaster',
-    name: 'Tokyo Disaster Medical Center',
-    type: 'hospital' as const,
-    lat: 35.7119,
-    lng: 139.4048,
-    address: 'Tokyo, Japan',
-    phone: '+81425265511',
-    purpose: 'Specialized National Earthquake and Disaster Center. Helicopter emergency medical system (HEMS) and seismic disaster triage.',
-    capabilities: ['Earthquake Medicine', 'Airlift Evacuation', 'Mass Triage']
   },
   {
     id: 'hub-london-trauma',
@@ -321,15 +245,15 @@ export const WORLD_EMERGENCY_HUBS = [
     capabilities: ['Major Trauma', 'Air Ambulance', 'Vascular Care']
   },
   {
-    id: 'hub-singapore-sgh',
-    name: 'Singapore General Hospital Emergency Hub',
+    id: 'hub-tokyo-disaster',
+    name: 'Tokyo Disaster Medical Center',
     type: 'hospital' as const,
-    lat: 1.2795,
-    lng: 103.8344,
-    address: 'Singapore',
-    phone: '+6562223322',
-    purpose: 'Southeast Asian regional disaster, burn, and hyperbaric emergency medical response hub.',
-    capabilities: ['Severe Burns', 'Toxicology', 'Critical Care']
+    lat: 35.7119,
+    lng: 139.4048,
+    address: 'Tokyo, Japan',
+    phone: '+81425265511',
+    purpose: 'Specialized National Earthquake and Disaster Center. Helicopter emergency medical system (HEMS) and seismic disaster triage.',
+    capabilities: ['Earthquake Medicine', 'Airlift Evacuation', 'Mass Triage']
   }
 ];
 
@@ -399,7 +323,7 @@ function mapOsmAmenityToCapabilities(amenity: string): ResourceCapability[] {
   }
 }
 
-// Fetch nearby OpenStreetMap facilities and merge with worldwide emergency hubs
+// Fetch nearby OpenStreetMap facilities around requested coordinates & merge with world hubs
 export async function fetchNearbyEmergencyPlaces(
   lat: number,
   lng: number,
@@ -448,30 +372,34 @@ export async function fetchNearbyEmergencyPlaces(
             capabilities: guide.capabilities
           };
         })
-        .filter((place: EmergencyPlace | null): place is EmergencyPlace => place !== null)
-        .sort((a: EmergencyPlace, b: EmergencyPlace) => a.distanceKm - b.distanceKm);
+        .filter((place: EmergencyPlace | null): place is EmergencyPlace => place !== null);
     }
   } catch (err) {
-    console.warn('Overpass API query failed, generating offline fallback places:', err);
+    console.warn('Overpass API query failed, generating offline fallback places for target coords:', err);
     localPlaces = generateOfflineFallback(lat, lng);
   }
 
-  // Calculate live GPS distance for all global emergency hubs
+  if (localPlaces.length === 0) {
+    localPlaces = generateOfflineFallback(lat, lng);
+  }
+
+  // Calculate live distance for all registered global emergency hubs
   const globalHubsWithDistance: EmergencyPlace[] = WORLD_EMERGENCY_HUBS.map((hub) => ({
     ...hub,
     distanceKm: calculateDistance(lat, lng, hub.lat, hub.lng)
   }));
 
-  return [...localPlaces, ...globalHubsWithDistance];
+  // Combine and sort so the closest facilities (within 1-15 km) are ALWAYS at the top
+  return [...localPlaces, ...globalHubsWithDistance].sort((a, b) => a.distanceKm - b.distanceKm);
 }
 
 function generateOfflineFallback(lat: number, lng: number): EmergencyPlace[] {
   const offlineTemplates = [
-    { name: 'District Civil Hospital & Trauma Center', type: 'hospital' as const, latOff: 0.015, lngOff: 0.012 },
-    { name: 'Emergency Medical & Nursing Clinic', type: 'clinic' as const, latOff: -0.012, lngOff: 0.018 },
-    { name: 'Central Police Station & Quick Response Post', type: 'police' as const, latOff: -0.018, lngOff: -0.015 },
-    { name: 'Fire & Disaster Rescue Station', type: 'fire_station' as const, latOff: 0.022, lngOff: -0.019 },
-    { name: 'Community Relief Shelter', type: 'shelter' as const, latOff: 0.008, lngOff: -0.024 }
+    { name: 'City Central Emergency Hospital & Trauma', type: 'hospital' as const, latOff: 0.012, lngOff: 0.010 },
+    { name: 'Emergency Medical & Urgent Care Clinic', type: 'clinic' as const, latOff: -0.010, lngOff: 0.015 },
+    { name: 'Central Police Station & Quick Response Post', type: 'police' as const, latOff: -0.015, lngOff: -0.012 },
+    { name: 'Fire & Disaster Rescue Station', type: 'fire_station' as const, latOff: 0.018, lngOff: -0.016 },
+    { name: 'Community Disaster Relief Shelter', type: 'shelter' as const, latOff: 0.007, lngOff: -0.020 }
   ];
 
   return offlineTemplates.map((t, idx) => {
@@ -479,11 +407,11 @@ function generateOfflineFallback(lat: number, lng: number): EmergencyPlace[] {
     const pLng = lng + t.lngOff;
     const guide = getFacilityPurpose(t.type, t.name);
     return {
-      id: `offline-${idx + 1}`,
+      id: `fallback-${idx + 1}-${lat.toFixed(2)}-${lng.toFixed(2)}`,
       name: t.name,
       type: t.type,
-      lat: pLat,
-      lng: pLng,
+      lat: Number(pLat.toFixed(6)),
+      lng: Number(pLng.toFixed(6)),
       distanceKm: calculateDistance(lat, lng, pLat, pLng),
       phone: '112',
       purpose: guide.purpose,
@@ -492,11 +420,10 @@ function generateOfflineFallback(lat: number, lng: number): EmergencyPlace[] {
   });
 }
 
-// Cache all local & global emergency facilities to IndexedDB
 export async function fetchAndCacheLiveFacilities(
   lat: number,
   lng: number,
-  radiusMeters: number = 12000
+  radiusMeters: number = 15000
 ): Promise<Resource[]> {
   const places = await fetchNearbyEmergencyPlaces(lat, lng, radiusMeters);
 
