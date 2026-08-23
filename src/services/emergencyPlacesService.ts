@@ -28,6 +28,47 @@ export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2
   return parseFloat((R * c).toFixed(1));
 }
 
+// In-memory cache for reverse geocoding to prevent repeat requests
+const locationNameCache = new Map<string, string>();
+
+/**
+ * Reverse-geocodes coordinates into a readable locality/city name via OpenStreetMap Nominatim
+ */
+export async function getReverseGeocodedLocation(lat: number, lng: number): Promise<string> {
+  const key = `${lat.toFixed(3)},${lng.toFixed(3)}`;
+  if (locationNameCache.has(key)) {
+    return locationNameCache.get(key)!;
+  }
+
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14`
+    );
+    const data = await res.json();
+    if (data && data.address) {
+      const addr = data.address;
+      const locality =
+        addr.suburb ||
+        addr.neighbourhood ||
+        addr.village ||
+        addr.town ||
+        addr.city ||
+        addr.county ||
+        'Local Area';
+      const stateOrCountry = addr.state || addr.country || '';
+      const resolvedName = stateOrCountry ? `${locality}, ${stateOrCountry}` : locality;
+      locationNameCache.set(key, resolvedName);
+      return resolvedName;
+    }
+  } catch (e) {
+    console.warn('Reverse geocoding network error, using coordinate label:', e);
+  }
+
+  const fallback = `Zone (${lat.toFixed(3)}, ${lng.toFixed(3)})`;
+  locationNameCache.set(key, fallback);
+  return fallback;
+}
+
 // Comprehensive Global Network: Africa, Gulf, Central Asia, South Asia, Europe, Americas, APAC
 export const WORLD_EMERGENCY_HUBS = [
   // ── AFRICA ──
