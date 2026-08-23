@@ -1,4 +1,4 @@
-# 🆘 CrisisConnect — AI-Powered Disaster Response Platform
+# CrisisConnect - AI-Powered Disaster Response Platform
 
 > **Real-time disaster response coordination with offline-capable AI triage, smart resource matching, and interactive crisis mapping.**
 
@@ -6,23 +6,21 @@
 [![PWA Ready](https://img.shields.io/badge/PWA-Ready-blueviolet.svg)](#offline-first-architecture)
 [![AI Powered](https://img.shields.io/badge/AI-Offline%20NLP-orange.svg)](#ai-triage-engine)
 
----
 
-## 🌍 The Problem
+## The Problem
 
 Every year, natural disasters kill **60,000+ people** and affect **200+ million worldwide**. The #1 failure point isn't lack of resources — it's **coordination chaos**:
 
-- 🔴 Victims can't effectively signal for help during infrastructure collapse
-- 🔴 Volunteers and relief organizations don't know where to go
-- 🔴 Information is fragmented across WhatsApp, social media, and government channels
-- 🔴 Resources are misallocated — excess in some areas, none in others
-- 🔴 Cell towers go down, leaving victims completely disconnected
+- Victims can't effectively signal for help during infrastructure collapse
+- Volunteers and relief organizations don't know where to go
+- Information is fragmented across WhatsApp, social media, and government channels
+- Resources are misallocated — excess in some areas, none in others
+- Cell towers go down, leaving victims completely disconnected
 
 **No existing open-source platform solves the last-mile hyperlocal coordination gap.**
 
----
 
-## 💡 Our Solution
+## Our Solution
 
 **CrisisConnect** is an AI-powered web platform that acts as **mission control for disaster response**, connecting victims, volunteers, and organizations through intelligent, offline-capable coordination.
 
@@ -30,19 +28,17 @@ Every year, natural disasters kill **60,000+ people** and affect **200+ million 
 
 | Feature | Description |
 |---------|-------------|
-| 🗺️ **Live Crisis Map** | Real-time interactive map with intelligent clustering, severity-aware coloring, and multi-layer visualization |
-| 🤖 **Offline AI Triage** | NLP model runs **entirely in your browser** (Transformers.js) — no internet needed. Automatically classifies urgency, extracts location, and identifies medical needs |
-| 🔗 **Smart Resource Matching** | Multi-criteria algorithm matches volunteers to victims based on proximity, urgency, capability, and waiting time |
-| 📡 **Offline-First PWA** | Full functionality without internet. Reports queue locally and sync when connection returns |
-| 📊 **Analytics Dashboard** | Real-time stats: active incidents, response times, resource utilization, priority distribution |
-| 🌐 **External Data Feeds** | Live integration with USGS Earthquakes and NASA EONET natural disaster events |
-| 🌀 **Demo Simulation** | Realistic hurricane simulation mode for demonstrations and training |
+| **Live Crisis Map** | Real-time interactive map with intelligent clustering, severity-aware coloring, and multi-layer visualization |
+| **Offline AI Triage** | NLP model runs **entirely in your browser** (Transformers.js) — no internet needed. Automatically classifies urgency, extracts location, and identifies medical needs |
+| **Smart Resource Matching** | Multi-criteria algorithm matches volunteers to victims based on proximity, urgency, capability, and waiting time |
+| **Offline-First PWA** | Full functionality without internet. Reports queue locally and sync when connection returns |
+| **Analytics Dashboard** | Real-time stats: active incidents, response times, resource utilization, priority distribution |
+| **External Data Feeds** | Live integration with USGS Earthquakes and NASA EONET natural disaster events |
+| **Demo Simulation** | Realistic hurricane simulation mode for demonstrations and training |
 
----
 
-## 🏗️ Architecture
+## Architecture
 
-```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    CrisisConnect PWA (Offline-First)             │
 │                                                                 │
@@ -74,11 +70,9 @@ Every year, natural disasters kill **60,000+ people** and affect **200+ million 
                     │  • Supabase Sync   │
                     │  • Nominatim Geo   │
                     └────────────────────┘
-```
 
----
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
@@ -93,9 +87,8 @@ Every year, natural disasters kill **60,000+ people** and affect **200+ million 
 | **Icons** | Lucide React | Consistent, lightweight icon system |
 | **Basemap** | Carto Dark Matter | Sleek dark map tiles (free, no API key) |
 
----
 
-## 🤖 AI Triage Engine
+## AI Triage Engine
 
 CrisisConnect uses a **fully offline AI triage system** powered by [Transformers.js](https://huggingface.co/docs/transformers.js):
 
@@ -106,26 +99,24 @@ CrisisConnect uses a **fully offline AI triage system** powered by [Transformers
 
 ### Triage Pipeline
 
-```
 Raw SOS Text → Zero-Shot Priority Classification → Category Detection
                                                   → People Count Extraction (Regex)
                                                   → Medical Condition Detection
                                                   → Location Extraction
                                                   → Tactical Summary Generation
-```
+
 
 ### Priority Levels
 
 | Priority | Label | Criteria | Response Target |
 |----------|-------|----------|-----------------|
-| 🔴 P1 | Critical | Imminent drowning, trapped, severe bleeding | < 15 min |
-| 🟠 P2 | Urgent | Medical needs, vulnerable trapped, insulin/oxygen | < 2 hours |
-| 🔵 P3 | Supplies | Food, water, blankets, power for devices | < 12 hours |
-| 🟢 P4 | Info | Road closures, damage reports, general status | As available |
+| P1 | Critical | Imminent drowning, trapped, severe bleeding | < 15 min |
+| P2 | Urgent | Medical needs, vulnerable trapped, insulin/oxygen | < 2 hours |
+| P3 | Supplies | Food, water, blankets, power for devices | < 12 hours |
+| P4 | Info | Road closures, damage reports, general status | As available |
 
----
 
-## 📡 Offline-First Architecture
+## Offline-First Architecture
 
 CrisisConnect is built to work when infrastructure fails:
 
@@ -135,9 +126,8 @@ CrisisConnect is built to work when infrastructure fails:
 - **Google Fonts**: Cached for consistent typography
 - **PWA**: Installable as a standalone app on any device
 
----
 
-## 🔗 Resource Matching Algorithm
+## Resource Matching Algorithm
 
 The matching engine uses a multi-criteria scoring formula:
 
@@ -151,9 +141,8 @@ Where:
 - **Starvation Bonus**: min(waitingHours × 5, 25) — prevents old requests from being ignored
 - **Capability Bonus**: +20 if volunteer has matching equipment (boat ↔ water rescue, etc.)
 
----
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -189,9 +178,7 @@ npm run build
 npm run preview
 ```
 
----
-
-## 🌀 Demo Simulation Mode
+## Demo Simulation Mode
 
 CrisisConnect includes a built-in **Hurricane Simulation** for demonstrations:
 
@@ -208,9 +195,8 @@ To hide the simulation controls during live judging:
 - The simulation panel disappears completely
 - All simulated data can be cleared with the "Reset All Data" button before hiding
 
----
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 crisisconnect/
@@ -249,7 +235,6 @@ crisisconnect/
 └── README.md                    # This file
 ```
 
----
 
 ## 🎯 Judging Criteria Alignment
 
@@ -261,32 +246,24 @@ crisisconnect/
 | **User Experience** | NASA mission control-inspired dark UI with glassmorphism, smooth animations, and intuitive map-first interface |
 | **Exceptionality** | Life-saving potential. Fully offline AI. Multi-criteria matching algorithm with mathematical rigor |
 
----
 
-## 🔮 Future Roadmap
+## Future Roadmap
 
 - [ ] WebRTC peer-to-peer device sync via QR codes (mesh networking without internet)
 - [ ] Voice-to-text SOS reports using Whisper.js
 - [ ] Multi-language support with offline translation
-- [ ] Integration with national emergency alert systems
-- [ ] Drone coordination layer for aerial reconnaissance
-- [ ] Hospital capacity and routing integration
 
----
+## License
 
-## 📄 License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
----
-
-## 🏆 Built for Reverie Hacks 2026
+## Built for Reverie Hacks 2026
 
 **Track**: Software Development  
 **Theme**: Beginner Friendly | Machine Learning/AI | Open Ended
 
----
 
 <p align="center">
-  <strong>CrisisConnect</strong> — Because in a disaster, every second counts.
+  <strong>CrisisConnect</strong> - Because in a disaster, every second counts.
 </p>
