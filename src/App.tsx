@@ -9,6 +9,7 @@ import { OfflineIndicator } from './components/OfflineIndicator';
 import { SimulationControls } from './components/SimulationControls';
 import { EmergencyNumbers } from './components/EmergencyNumbers';
 import { PeerChat } from './components/PeerChat';
+import { AIChatModal } from './components/AIChatModal';
 import { initializeAI, isModelLoaded, getAIMode } from './services/triageService';
 import { matchIncidentsToResources } from './services/matcherService';
 import { generateSimulatedIncident, generateSimulatedResource, generateInitialResources } from './services/simulationService';
@@ -46,6 +47,8 @@ export default function App() {
     categories: ['RESCUE', 'MEDICAL', 'FOOD_WATER', 'SHELTER', 'HAZARD']
   });
 
+  // Feature modals and live tracking state
+  const [isAIChatOpen, setIsAIChatOpen] = useState(false);
   const [isEmergencyNumbersOpen, setIsEmergencyNumbersOpen] = useState(false);
   const [isPeerChatOpen, setIsPeerChatOpen] = useState(false);
   const [userLat, setUserLat] = useState<number | null>(null);
@@ -53,7 +56,6 @@ export default function App() {
 
   const simulationIntervalRef = useRef<number | null>(null);
 
-  // Determine current active coordinate center
   const currentCenter = (userLat !== null && userLng !== null)
     ? { lat: userLat, lng: userLng }
     : DEFAULT_CENTER;
@@ -106,9 +108,9 @@ export default function App() {
     // IP Geolocation Fallback
     const fetchIPLocation = async () => {
       try {
-        const res = await fetch('https://ipapi.co/json/');
+        const res = await fetch('https://ipwho.is/');
         const data = await res.json();
-        if (data && data.latitude && data.longitude) {
+        if (data && data.success !== false && data.latitude && data.longitude) {
           setUserLat(data.latitude);
           setUserLng(data.longitude);
         }
@@ -117,7 +119,7 @@ export default function App() {
       }
     };
 
-    // Live Geolocation Tracking
+    // Live GPS tracking
     let watchId: number | null = null;
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
@@ -298,8 +300,18 @@ export default function App() {
         )}
       </div>
       
-      {/* Action Buttons */}
+      {/* Action Buttons (Bottom Right) */}
       <div style={{ position: 'fixed', bottom: '24px', right: '24px', display: 'flex', flexDirection: 'column', gap: '12px', zIndex: 100 }}>
+        {/* AI Assistant Button */}
+        <button
+          onClick={() => setIsAIChatOpen(true)}
+          title="Talk with AI Copilot"
+          style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#8b5cf6', color: 'white', fontSize: '20px', border: 'none', boxShadow: '0 4px 12px rgba(139, 92, 246, 0.4)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          🤖
+        </button>
+
+        {/* Bluetooth Mesh Chat Button */}
         <button
           onClick={() => setIsPeerChatOpen(true)}
           title="Bluetooth Mesh Chat"
@@ -307,6 +319,8 @@ export default function App() {
         >
           📡
         </button>
+
+        {/* Emergency Numbers Button */}
         <button
           onClick={() => setIsEmergencyNumbersOpen(true)}
           title="Emergency Numbers"
@@ -314,6 +328,8 @@ export default function App() {
         >
           📞
         </button>
+
+        {/* SOS Emergency Report Button */}
         <button 
           className="sos-button" 
           onClick={() => setIsReportModalOpen(true)} 
@@ -325,6 +341,12 @@ export default function App() {
       </div>
       
       {/* Modals */}
+      <AIChatModal
+        isOpen={isAIChatOpen}
+        onClose={() => setIsAIChatOpen(false)}
+        isOnline={isOnline}
+      />
+
       <ReportModal 
         isOpen={isReportModalOpen}
         onClose={() => setIsReportModalOpen(false)}
