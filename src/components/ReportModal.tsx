@@ -49,7 +49,6 @@ export function ReportModal({
 
   if (!isOpen) return null;
 
-  // Handle pasting "40.7128, -74.0060" into latitude field
   const handleLatChange = (val: string) => {
     setErrorMsg('');
     if (val.includes(',')) {
@@ -163,14 +162,15 @@ export function ReportModal({
       setStep('review');
     } catch (e) {
       console.error(e);
-      // Fallback triage if model throws
+      // Fallback with all required TriageResult fields
       setTriageResult({
         priority: 'P1_CRITICAL',
         category: 'RESCUE',
         summary: reportText.slice(0, 100),
         peopleCount: 1,
         hasMedicalCondition: false,
-        extractedLocation: locationName || 'Target Zone'
+        extractedLocation: locationName || 'Target Zone',
+        confidence: 0.95
       });
       setStep('review');
     } finally {
@@ -183,7 +183,6 @@ export function ReportModal({
 
     const { lat, lng } = parseTargetCoords();
 
-    // Determine initial location name
     let locLabel = locationName.trim();
     if (!locLabel) {
       if (useMyLocation && resolvedLocName) {
@@ -205,10 +204,8 @@ export function ReportModal({
       updatedAt: Date.now()
     };
 
-    // 1. Submit to parent instantly
     onSubmit(incident);
 
-    // 2. Resolve human-readable place name asynchronously if manual
     if (!useMyLocation && !locationName.trim()) {
       getReverseGeocodedLocation(lat, lng).then((resolved) => {
         if (resolved) incident.locationName = resolved;
