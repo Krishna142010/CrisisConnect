@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, X, Sparkles } from 'lucide-react';
+import { Send, Bot, User, X, ShieldCheck } from 'lucide-react';
 
 interface AIChatModalProps {
   isOpen: boolean;
@@ -14,14 +14,14 @@ interface Message {
   timestamp: string;
 }
 
-export function AIChatModal({ isOpen, onClose, isOnline }: AIChatModalProps) {
+export function AIChatModal({ isOpen, onClose }: AIChatModalProps) {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
       sender: 'ai',
-      text: 'Hello! I am your CrisisConnect AI Assistant. Ask me about first aid procedures, flood/earthquake safety protocols, shelter guidelines, or disaster survival steps.',
+      text: 'Hello! I am your Local Disaster Assistant. I operate 100% on-device (zero server API / zero credit usage) to provide instant first-aid, evacuation, and emergency guidelines.',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
   ]);
@@ -41,24 +41,67 @@ export function AIChatModal({ isOpen, onClose, isOnline }: AIChatModalProps) {
     'Flood evacuation safety tips'
   ];
 
-  const generateOfflineResponse = (query: string): string => {
+  // 100% Local On-Device Knowledge Base — Consumes 0 API Credits
+  const generateLocalResponse = (query: string): string => {
     const q = query.toLowerCase();
-    if (q.includes('flood') || q.includes('water')) {
-      return '⚠️ **Flood Safety:**\n• Move to higher ground immediately.\n• Do not walk, swim, or drive through flood waters.\n• Disconnect electrical appliances and main switches if safe to do so.\n• Keep emergency food and clean drinking water sealed in waterproof containers.';
+
+    if (q.includes('flood') || q.includes('water') || q.includes('drown')) {
+      return '🌊 **Flood Safety Protocol:**\n' +
+        '• Move immediately to higher ground or upper floors.\n' +
+        '• Never drive, walk, or swim through moving water (6 inches can knock you down).\n' +
+        '• Turn off main electrical breakers if safe before water rises.\n' +
+        '• Boil all tap water before drinking until authorities declare it safe.';
     }
-    if (q.includes('earthquake') || q.includes('quake')) {
-      return '⚠️ **Earthquake Protocol:**\n• **Drop, Cover, and Hold On!** Get under a sturdy table or desk.\n• Stay away from glass, windows, and exterior walls.\n• If outdoors, move to an open area away from power lines and collapsing structures.\n• Do not use elevators.';
+
+    if (q.includes('earthquake') || q.includes('quake') || q.includes('tremor') || q.includes('shake')) {
+      return '🏚️ **Earthquake Safety Protocol:**\n' +
+        '• **DROP, COVER, and HOLD ON!** Get under heavy furniture.\n' +
+        '• Stay clear of glass, exterior walls, and tall furniture.\n' +
+        '• If outdoors, move to an open area away from buildings, streetlights, and utility wires.\n' +
+        '• Do NOT use elevators after shaking stops.';
     }
-    if (q.includes('bleed') || q.includes('wound') || q.includes('first aid')) {
-      return '🩹 **First Aid - Severe Bleeding:**\n1. Apply firm, direct pressure on the wound using a clean cloth or bandage.\n2. Maintain continuous pressure for at least 5-10 minutes.\n3. Elevate the injured limb above heart level if possible.\n4. If bleeding does not stop, apply a pressure bandage and call emergency rescue immediately.';
+
+    if (q.includes('bleed') || q.includes('wound') || q.includes('cut') || q.includes('blood')) {
+      return '🩹 **First Aid: Severe Bleeding:**\n' +
+        '1. Apply direct, firm pressure on the wound with a clean cloth or gauze.\n' +
+        '2. Do NOT remove soaked cloth—add more layers on top.\n' +
+        '3. Elevate the wounded area above the level of the heart if possible.\n' +
+        '4. If blood spurts continuously, apply a tourniquet 2-3 inches above the wound (not on a joint) and note the time applied.';
     }
-    if (q.includes('kit') || q.includes('supplies') || q.includes('checklist')) {
-      return '🎒 **Emergency Kit Essentials:**\n• Water (at least 3 liters per person per day for 3 days)\n• Non-perishable food & can opener\n• Battery-powered or hand-crank radio & flashlight\n• First aid kit, whistle, power bank, and vital medications.';
+
+    if (q.includes('burn') || q.includes('fire') || q.includes('smoke')) {
+      return '🔥 **Burn & Fire First Aid:**\n' +
+        '• Cool the burn under gentle, cold running water for at least 10–20 minutes.\n' +
+        '• Do NOT apply ice, butter, or oil to burns.\n' +
+        '• Cover loosely with a sterile, non-stick dressing.\n' +
+        '• If trapped in smoke, stay low near the floor where air is cleaner.';
     }
-    return `Understood. For emergencies involving "${query}", prioritize personal safety first, move away from immediate hazards, and dial regional emergency dispatch. Keep your battery conserved and monitor local radio channels for updates.`;
+
+    if (q.includes('cpr') || q.includes('unconscious') || q.includes('breathing')) {
+      return '🫀 **Emergency CPR Protocol:**\n' +
+        '1. Check responsiveness and breathing.\n' +
+        '2. Place hands centered on chest and push hard and fast (100–120 beats per minute, matching the beat of "Stayin\' Alive").\n' +
+        '3. Allow chest to fully recoil between compressions.\n' +
+        '4. Do not stop until paramedics or emergency help arrives.';
+    }
+
+    if (q.includes('kit') || q.includes('supplies') || q.includes('bag') || q.includes('checklist')) {
+      return '🎒 **Essential Disaster Go-Bag:**\n' +
+        '• Water (at least 3 liters per person/day for 3 days)\n' +
+        '• Non-perishable food & manual can opener\n' +
+        '• Battery-operated or hand-crank flashlight & radio\n' +
+        '• First aid kit, prescription medicines, and power bank\n' +
+        '• Whistle, dust mask, and copies of important documents in a waterproof pouch.';
+    }
+
+    if (q.includes('hello') || q.includes('hi') || q.includes('hey') || q.includes('who are you')) {
+      return 'Hello! I am your local disaster response copilot. Ask me about first aid, disaster response steps, CPR, evacuation protocols, or emergency checklists.';
+    }
+
+    return `Safety Advice for "${query}":\n• Prioritize moving away from any active hazard.\n• Keep battery usage minimal and monitor official regional radio frequencies.\n• For urgent rescue, use the red SOS button on the bottom right to dispatch responders.`;
   };
 
-  const handleSend = async (textToSend?: string) => {
+  const handleSend = (textToSend?: string) => {
     const messageText = textToSend || input;
     if (!messageText.trim()) return;
 
@@ -73,8 +116,9 @@ export function AIChatModal({ isOpen, onClose, isOnline }: AIChatModalProps) {
     setInput('');
     setIsTyping(true);
 
+    // Instant local evaluation without calling external paid APIs
     setTimeout(() => {
-      const reply = generateOfflineResponse(messageText);
+      const reply = generateLocalResponse(messageText);
       const aiMsg: Message = {
         id: crypto.randomUUID(),
         sender: 'ai',
@@ -83,7 +127,7 @@ export function AIChatModal({ isOpen, onClose, isOnline }: AIChatModalProps) {
       };
       setMessages(prev => [...prev, aiMsg]);
       setIsTyping(false);
-    }, 600);
+    }, 350);
   };
 
   return (
@@ -98,10 +142,10 @@ export function AIChatModal({ isOpen, onClose, isOnline }: AIChatModalProps) {
             </div>
             <div>
               <div style={{ fontWeight: 700, color: 'white', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                AI Disaster Copilot <Sparkles size={16} color="#818cf8" />
+                Local AI Assistant
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                {isOnline ? 'Online Assistant • Real-time guidance' : 'Offline Mode • Local triage intelligence'}
+              <div style={{ fontSize: '0.75rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <ShieldCheck size={14} /> 100% Offline • Zero API Credit Usage
               </div>
             </div>
           </div>
@@ -153,7 +197,7 @@ export function AIChatModal({ isOpen, onClose, isOnline }: AIChatModalProps) {
           ))}
           {isTyping && (
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', color: '#94a3b8', fontSize: '0.8rem' }}>
-              <Bot size={16} /> Thinking...
+              <Bot size={16} /> Retrieving local protocol...
             </div>
           )}
           <div ref={messagesEndRef} />
@@ -185,7 +229,7 @@ export function AIChatModal({ isOpen, onClose, isOnline }: AIChatModalProps) {
         <div style={{ padding: '12px 16px', borderTop: '1px solid #1f2937', backgroundColor: '#1e293b', display: 'flex', gap: '8px' }}>
           <input
             type="text"
-            placeholder="Ask AI for emergency advice, first aid steps..."
+            placeholder="Ask for first-aid, evacuation, or safety steps..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
