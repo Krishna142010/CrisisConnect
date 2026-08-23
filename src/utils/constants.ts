@@ -1,0 +1,10 @@
+export const DEFAULT_CENTER = { lat: 29.7604, lng: -95.3698 };
+export const DEFAULT_ZOOM = 11;
+export const MAP_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+export const MAX_MATCH_RADIUS_KM = 25;
+export const CLUSTER_RADIUS = 50;
+export const CLUSTER_MAX_ZOOM = 15;
+export const SIMULATION_INTERVAL_MS = 1500;
+export const SIMULATION_TOTAL_EVENTS = 40;
+export const APP_NAME = 'CrisisConnect';
+export const APP_TAGLINE = 'AI-Powered Disaster Response Coordination';
