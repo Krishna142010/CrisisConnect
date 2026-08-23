@@ -330,6 +330,8 @@ export default function App() {
         onClose={() => setIsReportModalOpen(false)}
         onSubmit={handleNewIncident}
         aiModelLoaded={aiModelLoaded}
+        userLat={userLat}
+        userLng={userLng}
       />
 
       <EmergencyNumbers
