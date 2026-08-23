@@ -45,15 +45,19 @@ function mapOsmAmenityToCapabilities(amenity: string): ResourceCapability[] {
   }
 }
 
-// 1. Fetch live facilities from OpenStreetMap Overpass API
-export async function fetchAndCacheLiveFacilities(lat: number, lng: number, radiusMeters: number = 10000): Promise<Resource[]> {
+// 1. Returns EmergencyPlace[] for the Emergency Directory UI
+export async function fetchNearbyEmergencyPlaces(
+  lat: number,
+  lng: number,
+  radiusMeters: number = 15000
+): Promise<EmergencyPlace[]> {
   const query = `
     [out:json][timeout:15];
     (
       node["amenity"~"hospital|clinic|nursing_home|pharmacy|police|fire_station|shelter|social_facility"](around:${radiusMeters},${lat},${lng});
       way["amenity"~"hospital|clinic|nursing_home|pharmacy|police|fire_station|shelter|social_facility"](around:${radiusMeters},${lat},${lng});
     );
-    out center 50;
+    out center 40;
   `;
 
   const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
@@ -64,74 +68,91 @@ export async function fetchAndCacheLiveFacilities(lat: number, lng: number, radi
     const data = await res.json();
 
     if (data.elements && data.elements.length > 0) {
-      const liveResources: Resource[] = data.elements
+      return data.elements
         .map((el: any) => {
-          const pLat = el.lat ?? el.center?.lat;
-          const pLng = el.lon ?? el.center?.lon;
+          const placeLat = el.lat ?? el.center?.lat;
+          const placeLng = el.lon ?? el.center?.lon;
           const tags = el.tags || {};
-          if (!pLat || !pLng) return null;
+          if (!placeLat || !placeLng) return null;
 
           const amenity = tags.amenity || 'hospital';
           const name = tags.name || tags['name:en'] || `${amenity.replace('_', ' ').toUpperCase()} Facility`;
 
           return {
-            id: `osm-${el.id}`,
+            id: String(el.id),
             name,
-            lat: Number(pLat),
-            lng: Number(pLng),
-            capabilities: mapOsmAmenityToCapabilities(amenity),
-            capacityRemaining: Math.floor(20 + Math.random() * 80),
-            isActive: true,
-            phone: tags.phone || tags['contact:phone'] || tags['emergency:phone'] || '112'
+            type: amenity as EmergencyPlace['type'],
+            lat: Number(placeLat),
+            lng: Number(placeLng),
+            distanceKm: calculateDistance(lat, lng, Number(placeLat), Number(placeLng)),
+            phone: tags.phone || tags['contact:phone'] || tags['emergency:phone'] || undefined,
+            address: tags['addr:street'] ? `${tags['addr:street']} ${tags['addr:housenumber'] || ''}`.trim() : undefined
           };
         })
-        .filter((r: Resource | null): r is Resource => r !== null);
-
-      if (liveResources.length > 0) {
-        for (const resItem of liveResources) {
-          await saveResource(resItem);
-        }
-        return liveResources;
-      }
+        .filter((place: EmergencyPlace | null): place is EmergencyPlace => place !== null)
+        .sort((a: EmergencyPlace, b: EmergencyPlace) => a.distanceKm - b.distanceKm);
     }
   } catch (err) {
-    console.warn('Live OSM fetch failed or offline, loading local IndexedDB cache:', err);
+    console.warn('Failed to query Overpass API, returning offline default places:', err);
   }
 
-  // 2. Offline fallback: read from IndexedDB
-  const cached = await getAllResources();
-  if (cached.length > 0) return cached;
-
-  // 3. Fallback generator if completely offline without cache
-  return generateOfflineEmergencyPoints(lat, lng);
+  // Offline fallback places
+  return [
+    {
+      id: 'local-1',
+      name: 'District Civil Hospital & Emergency Unit',
+      type: 'hospital',
+      lat: lat + 0.015,
+      lng: lng + 0.015,
+      distanceKm: 2.1,
+      phone: '112'
+    },
+    {
+      id: 'local-2',
+      name: 'Central Police Station & Quick Response Post',
+      type: 'police',
+      lat: lat - 0.018,
+      lng: lng + 0.012,
+      distanceKm: 2.4,
+      phone: '112'
+    },
+    {
+      id: 'local-3',
+      name: 'Fire & Disaster Rescue Station',
+      type: 'fire_station',
+      lat: lat + 0.022,
+      lng: lng - 0.019,
+      distanceKm: 3.2,
+      phone: '101'
+    }
+  ];
 }
 
-function generateOfflineEmergencyPoints(lat: number, lng: number): Resource[] {
-  const offlineTemplates = [
-    { name: 'District Civil Hospital & Trauma Unit', caps: ['MEDICAL_KIT', 'GENERAL'] },
-    { name: 'Red Cross Emergency Clinic & Nursing Center', caps: ['MEDICAL_KIT', 'FOOD_WATER'] },
-    { name: 'Central Police Station & Quick Response Team', caps: ['VEHICLE_4X4', 'GENERAL'] },
-    { name: 'Fire & Disaster Rescue Station', caps: ['BOAT', 'VEHICLE_4X4'] },
-    { name: 'Community Medical & Maternity Center', caps: ['MEDICAL_KIT'] },
-    { name: 'Emergency Disaster Relief Shelter', caps: ['FOOD_WATER', 'GENERAL'] },
-    { name: '24/7 Essential Pharmacy & Medical Depot', caps: ['MEDICAL_KIT'] }
-  ];
+// 2. Returns Resource[] and saves to IndexedDB for offline map matching
+export async function fetchAndCacheLiveFacilities(
+  lat: number,
+  lng: number,
+  radiusMeters: number = 12000
+): Promise<Resource[]> {
+  const places = await fetchNearbyEmergencyPlaces(lat, lng, radiusMeters);
 
-  return offlineTemplates.map((item, idx) => {
-    const angle = (idx * (360 / offlineTemplates.length) * Math.PI) / 180;
-    const distanceKm = 2.5 + (idx % 4) * 2.0; // 2.5km to 8.5km radius
-    const latOffset = (distanceKm * Math.cos(angle)) / 111.32;
-    const lngOffset = (distanceKm * Math.sin(angle)) / (111.32 * Math.cos((lat * Math.PI) / 180));
+  const resources: Resource[] = places.map((p) => ({
+    id: `osm-${p.id}`,
+    name: p.name,
+    lat: p.lat,
+    lng: p.lng,
+    capabilities: mapOsmAmenityToCapabilities(p.type),
+    capacityRemaining: Math.floor(25 + Math.random() * 75),
+    isActive: true,
+    phone: p.phone || '112'
+  }));
 
-    return {
-      id: `offline-res-${idx + 1}`,
-      name: item.name,
-      lat: Number((lat + latOffset).toFixed(6)),
-      lng: Number((lng + lngOffset).toFixed(6)),
-      capabilities: item.caps as ResourceCapability[],
-      capacityRemaining: 50,
-      isActive: true,
-      phone: '112'
-    };
-  });
+  if (resources.length > 0) {
+    for (const res of resources) {
+      await saveResource(res);
+    }
+    return resources;
+  }
+
+  return getAllResources();
 }
