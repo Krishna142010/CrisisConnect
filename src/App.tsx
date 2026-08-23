@@ -156,7 +156,7 @@ export default function App() {
     const loadLocalEmergencyData = async () => {
       try {
         // 1. Fetch real hospitals, nursing homes, fire, police via OpenStreetMap Overpass API
-        const facilities = await fetchAndCacheLiveFacilities(userLat, userLng, 10000);
+        const facilities = await fetchAndCacheLiveFacilities(userLat, userLng, 12000);
         setResources(facilities);
 
         // 2. Generate initial local incidents if empty
@@ -182,14 +182,33 @@ export default function App() {
     loadLocalEmergencyData();
   }, [userLat, userLng]);
 
+  // Recalculate resource-incident allocation matches
   useEffect(() => {
     const newMatches = matchIncidentsToResources(incidents.filter(i => i.status === 'ACTIVE'), resources);
     setMatches(newMatches);
   }, [incidents, resources]);
 
-  const handleNewIncident = useCallback((incident: Incident) => {
+  // ── KEY FEATURE: Handle new incident submission (GPS or Manual Coords) ──
+  const handleNewIncident = useCallback(async (incident: Incident) => {
+    // 1. Add to incident list & save to IndexedDB
     setIncidents(prev => [incident, ...prev]);
-    saveIncident(incident);
+    await saveIncident(incident);
+
+    // 2. Automatically switch to map and select the incident so CrisisMap frames it with the nearest facility
+    setActiveTab('map');
+    setSelectedIncident(incident);
+
+    // 3. If the coordinates are far from known facilities, fetch & append new facilities around that spot
+    try {
+      const extraFacilities = await fetchAndCacheLiveFacilities(incident.lat, incident.lng, 12000);
+      setResources(prev => {
+        const existingIds = new Set(prev.map(r => r.id));
+        const newlyDiscovered = extraFacilities.filter(f => !existingIds.has(f.id));
+        return [...prev, ...newlyDiscovered];
+      });
+    } catch (err) {
+      console.warn('Could not query facilities around incident coordinates:', err);
+    }
   }, []);
 
   const handleResolveIncident = useCallback((id: string) => {
