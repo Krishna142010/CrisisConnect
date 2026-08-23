@@ -46,7 +46,7 @@ export default function App() {
     categories: ['RESCUE', 'MEDICAL', 'FOOD_WATER', 'SHELTER', 'HAZARD']
   });
 
-  // New features state
+  // Location and helper states
   const [isEmergencyNumbersOpen, setIsEmergencyNumbersOpen] = useState(false);
   const [isPeerChatOpen, setIsPeerChatOpen] = useState(false);
   const [userLat, setUserLat] = useState<number | null>(null);
@@ -99,17 +99,47 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
 
-    // Track GPS location for emergency numbers & Bluetooth chat
+    // IP Fallback function
+    const fetchIPLocation = async () => {
+      try {
+        const res = await fetch('https://ipapi.co/json/');
+        const data = await res.json();
+        if (data && data.latitude && data.longitude) {
+          setUserLat(data.latitude);
+          setUserLng(data.longitude);
+        }
+      } catch (err) {
+        console.warn('IP geolocation fallback failed:', err);
+      }
+    };
+
+    // Geolocation Resolution
     let watchId: number | null = null;
     if ('geolocation' in navigator) {
+      // 1. Immediate high-accuracy position request
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setUserLat(pos.coords.latitude);
+          setUserLng(pos.coords.longitude);
+        },
+        (err) => {
+          console.warn('Direct GPS fix failed, falling back to IP:', err.message);
+          fetchIPLocation();
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+
+      // 2. Active continuous listener
       watchId = navigator.geolocation.watchPosition(
         (pos) => {
           setUserLat(pos.coords.latitude);
           setUserLng(pos.coords.longitude);
         },
-        (err) => console.warn('GPS unavailable:', err.message),
-        { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+        (err) => console.warn('GPS continuous tracking error:', err.message),
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 5000 }
       );
+    } else {
+      fetchIPLocation();
     }
 
     return () => {
@@ -132,7 +162,6 @@ export default function App() {
 
   const handleResolveIncident = useCallback((id: string) => {
     setIncidents(prev => prev.map(inc => inc.id === id ? { ...inc, status: 'RESOLVED', updatedAt: Date.now() } : inc));
-    // Also update offline DB
     const updateDb = async () => {
       const all = await getAllIncidents();
       const target = all.find(i => i.id === id);
@@ -253,7 +282,7 @@ export default function App() {
           </div>
         )}
 
-        {(activeTab === 'map') && (
+        {activeTab === 'map' && (
           <Sidebar 
             isOpen={isSidebarOpen}
             incidents={incidents}
@@ -266,9 +295,8 @@ export default function App() {
         )}
       </div>
       
-      {/* ── Action Buttons (Bottom Right) ── */}
+      {/* Action Buttons */}
       <div style={{ position: 'fixed', bottom: '24px', right: '24px', display: 'flex', flexDirection: 'column', gap: '12px', zIndex: 100 }}>
-        {/* Bluetooth Chat Button */}
         <button
           onClick={() => setIsPeerChatOpen(true)}
           title="Bluetooth Mesh Chat"
@@ -276,7 +304,6 @@ export default function App() {
         >
           📡
         </button>
-        {/* Emergency Numbers Button */}
         <button
           onClick={() => setIsEmergencyNumbersOpen(true)}
           title="Emergency Numbers"
@@ -284,7 +311,6 @@ export default function App() {
         >
           📞
         </button>
-        {/* SOS Report Button */}
         <button 
           className="sos-button" 
           onClick={() => setIsReportModalOpen(true)} 
@@ -295,7 +321,7 @@ export default function App() {
         </button>
       </div>
       
-      {/* ── Modals ── */}
+      {/* Modals */}
       <ReportModal 
         isOpen={isReportModalOpen}
         onClose={() => setIsReportModalOpen(false)}
