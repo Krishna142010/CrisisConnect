@@ -34,7 +34,7 @@ export function ReportModal({
   const [userLng, setUserLng] = useState<number | null>(initialLng ?? null);
   const [geoStatus, setGeoStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
-  // Sync with coordinates resolved by App.tsx and reverse geocode locality name
+  // Sync GPS coordinates from App.tsx
   useEffect(() => {
     if (initialLat && initialLng) {
       setUserLat(initialLat);
@@ -119,13 +119,13 @@ export function ReportModal({
   const getLat = (): number => {
     if (useMyLocation && userLat !== null) return userLat;
     if (!useMyLocation && manualLat) return parseFloat(manualLat) || defaultLat;
-    return defaultLat + (Math.random() - 0.5) * 0.01;
+    return defaultLat;
   };
 
   const getLng = (): number => {
     if (useMyLocation && userLng !== null) return userLng;
     if (!useMyLocation && manualLng) return parseFloat(manualLng) || defaultLng;
-    return defaultLng + (Math.random() - 0.5) * 0.01;
+    return defaultLng;
   };
 
   const handleConfirm = async () => {
@@ -134,14 +134,13 @@ export function ReportModal({
     const reportedLat = getLat();
     const reportedLng = getLng();
 
-    // Resolve accurate locality name
+    // Determine location name based strictly on whether manual entry or GPS was used
     let finalLocName = locationName.trim();
     if (!finalLocName) {
-      if (triageResult.extractedLocation && triageResult.extractedLocation !== 'Unknown Location' && triageResult.extractedLocation !== 'Unknown') {
-        finalLocName = triageResult.extractedLocation;
-      } else if (resolvedLocName) {
+      if (useMyLocation && resolvedLocName) {
         finalLocName = resolvedLocName;
       } else {
+        // For manual entry, dynamically geocode the manual coordinates (e.g. NYC)
         finalLocName = await getReverseGeocodedLocation(reportedLat, reportedLng);
       }
     }
@@ -167,7 +166,6 @@ export function ReportModal({
       setTriageResult(null);
       setGeoStatus('idle');
       setLocationName('');
-      setResolvedLocName('');
     }, 2000);
   };
 
@@ -188,7 +186,7 @@ export function ReportModal({
                   className="form-textarea"
                   value={reportText}
                   onChange={(e) => setReportText(e.target.value)}
-                  placeholder="Describe the emergency... e.g., 'Flash flood water rising rapidly near Main Market, 4 people trapped on 2nd floor, urgent rescue needed'"
+                  placeholder="Describe the emergency... e.g., 'Severe building collapse on 5th Avenue, people trapped, medical team required'"
                   rows={4}
                   style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #374151', backgroundColor: '#111827', color: 'white' }}
                 />
@@ -204,14 +202,17 @@ export function ReportModal({
 
                 {geoStatus === 'success' && resolvedLocName && useMyLocation && (
                   <div style={{ fontSize: '0.8rem', color: '#10b981', marginTop: '4px', fontWeight: 500 }}>
-                    📍 Detected Region: {resolvedLocName}
+                    📍 Detected GPS Region: {resolvedLocName}
                   </div>
                 )}
 
                 {!useMyLocation && (
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                    <input className="form-input" placeholder="Lat" value={manualLat} onChange={e => setManualLat(e.target.value)} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: 'white' }} />
-                    <input className="form-input" placeholder="Lng" value={manualLng} onChange={e => setManualLng(e.target.value)} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: 'white' }} />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input className="form-input" placeholder="Latitude (e.g. 40.7128)" value={manualLat} onChange={e => setManualLat(e.target.value)} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: 'white' }} />
+                      <input className="form-input" placeholder="Longitude (e.g. -74.0060)" value={manualLng} onChange={e => setManualLng(e.target.value)} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: 'white' }} />
+                    </div>
+                    <input className="form-input" placeholder="Optional place name (e.g. Manhattan, NYC)" value={locationName} onChange={e => setLocationName(e.target.value)} style={{ padding: '8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: 'white' }} />
                   </div>
                 )}
               </div>
@@ -246,7 +247,7 @@ export function ReportModal({
                   {triageResult.hasMedicalCondition && <span style={{ color: '#ef4444' }}>Medical Need</span>}
                 </div>
                 <div style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
-                  Location: <strong style={{ color: '#38bdf8' }}>{locationName || resolvedLocName || triageResult.extractedLocation || 'Current GPS Location'}</strong>
+                  Target Coords: <strong style={{ color: '#38bdf8' }}>{getLat().toFixed(4)}, {getLng().toFixed(4)}</strong>
                 </div>
               </div>
             </div>
