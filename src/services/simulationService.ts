@@ -1,60 +1,74 @@
-import { Incident, Resource, Priority, Category, ResourceCapability } from '../types';
+import { Incident, Resource, Priority, ResourceCapability } from '../types';
 import { fallbackTriage } from './triageService';
 
 const SOS_MESSAGES = [
-  'Water rising fast at 4210 Elm Street, 3 kids trapped on 2nd floor, need rescue boat NOW',
-  'Elderly woman at Pine Ridge Apartments needs insulin urgently, diabetic shock imminent',
-  'Power lines down on Oak Avenue, electrical fire spreading to adjacent homes',
-  'Family of 5 stranded on roof at 789 Maple Drive, water at chest level',
-  'Gas leak detected near Central Elementary School, 200 students sheltering in place',
-  'Need drinking water for 15 people at the Community Center on Main St',
-  'Severe asthma attack, out of inhalers, location is 550 West Ave',
-  'Bridge washed out on County Road 4, two cars trapped in swift water',
-  'Building collapsed at 3rd and Washington, multiple people trapped inside',
-  'Shelter needed for 4 people, house destroyed by storm, currently at gas station on Route 9',
-  'Medical emergency, pregnant woman in labor, roads flooded, cannot reach hospital',
-  'Chemical spill on highway overpass, strong fumes, difficulty breathing',
-  'Need blankets and warm clothes for 8 people stranded outdoors near the park',
-  'Tree fell on house at 1024 Forest Lane, 2 people injured inside',
-  'Nursing home generator failed, need oxygen and power immediately for 30 residents',
-  'Out of food and baby formula, stuck in apartment at 88 Riverside Drive for 3 days',
-  'Flash flood sweeping cars away near downtown intersection, please send boats',
-  'Fire spreading rapidly towards subdivision off Highway 6, need evacuation assistance',
-  'Diabetic person passed out, needs medical help at 440 Pine Street',
-  'Drinking water contaminated, we have 12 people sick at the temporary camp',
-  'Road blocked by debris, emergency supplies cannot reach 50 people at the church',
-  'Roof caved in at warehouse, at least 5 workers trapped underneath',
-  'Need urgent evacuation, water is entering the first floor of our house on River Road',
-  'Transformer exploded, large fire threatening residential area on the east side',
-  'Lost child wandering near the flooded creek by Oakwood Park, needs rescue',
-  'Ran out of medication for heart condition, roads impassable, 70 year old man',
-  'Temporary shelter at high school flooded, moving to second floor, need relocation',
-  'Multiple traffic accidents due to zero visibility, injuries reported on I-95 North',
-  'Need food and water for 25 people sheltering at the local library',
-  'Chemical plant emitting yellow smoke, residents downwind complaining of burning eyes'
+  'Flash flood water rising rapidly, 3 people trapped on rooftop, urgent rescue needed',
+  'Elderly patient with severe medical distress, roads flooded, urgent ambulance required',
+  'Electrical line down and fire hazard spreading to residential structures',
+  'Family stranded near riverbank with water level rising quickly, need boat rescue',
+  'Structural damage and wall collapse reported, 2 people trapped under debris',
+  'Emergency drinking water and medical supplies needed at local community center',
+  'Severe asthma attack, oxygen supply depleted, cannot reach hospital due to road blockage',
+  'Bridge submerged by flash flood, multiple vehicles stranded in swift water',
+  'Relief shelter overflowing, urgent requirement for clean drinking water and food packets',
+  'Tree fell on residential home, injuries reported, emergency triage needed',
+  'Transformer explosion causing localized fire near residential block',
+  'Flash flood sweeping across low-lying roads, urgent evacuation assistance requested'
 ];
 
-const VOLUNTEER_NAMES = [
-  'John Smith', 'Sarah Davis', 'Mike Johnson', 'Emily Brown', 'Chris Wilson',
-  'Jessica Taylor', 'David Miller', 'Ashley Moore', 'James Taylor', 'Lisa Anderson',
-  'Robert Thomas', 'Megan Jackson', 'William White', 'Amanda Harris', 'Richard Martin',
-  'Jennifer Thompson', 'Joseph Garcia', 'Elizabeth Martinez', 'Thomas Robinson', 'Maria Clark'
+const EMERGENCY_UNITS = [
+  { name: 'District Emergency Medical Center', capabilities: ['MEDICAL_KIT', 'GENERAL'] as ResourceCapability[] },
+  { name: 'Civil Defense & Quick Response Team', capabilities: ['BOAT', 'VEHICLE_4X4', 'GENERAL'] as ResourceCapability[] },
+  { name: 'Red Cross Disaster Relief Post', capabilities: ['FOOD_WATER', 'MEDICAL_KIT'] as ResourceCapability[] },
+  { name: 'Fire & Rescue Response Squad', capabilities: ['VEHICLE_4X4', 'GENERAL'] as ResourceCapability[] },
+  { name: 'Community Emergency Clinic', capabilities: ['MEDICAL_KIT'] as ResourceCapability[] },
+  { name: 'Flood Rescue & Boat Dispatch Unit', capabilities: ['BOAT', 'VEHICLE_4X4'] as ResourceCapability[] },
+  { name: 'Emergency Supplies & Food Depot', capabilities: ['FOOD_WATER', 'GENERAL'] as ResourceCapability[] },
+  { name: 'Disaster Volunteer Taskforce', capabilities: ['GENERAL', 'VEHICLE_4X4'] as ResourceCapability[] }
 ];
 
 const RESOURCE_CAPABILITIES: ResourceCapability[] = ['BOAT', 'VEHICLE_4X4', 'MEDICAL_KIT', 'FOOD_WATER', 'GENERAL'];
 
-export const generateSimulatedIncident = (center: {lat: number, lng: number}): Incident => {
-  const randomLatOffset = (Math.random() - 0.5) * 0.2;
-  const randomLngOffset = (Math.random() - 0.5) * 0.2;
+// Precise geodesic radial offset calculator (1 degree lat ~= 111.32 km)
+function calculateGeodesicOffset(
+  centerLat: number,
+  centerLng: number,
+  minKm: number,
+  maxKm: number
+): { lat: number; lng: number } {
+  const radiusKm = minKm + Math.random() * (maxKm - minKm);
+  const angle = Math.random() * 2 * Math.PI;
+
+  const latOffset = (radiusKm * Math.cos(angle)) / 111.32;
+  const cosLat = Math.cos((centerLat * Math.PI) / 180);
+  const lngOffset = (radiusKm * Math.sin(angle)) / (111.32 * (Math.abs(cosLat) > 0.01 ? cosLat : 1));
+
+  return {
+    lat: Number((centerLat + latOffset).toFixed(6)),
+    lng: Number((centerLng + lngOffset).toFixed(6))
+  };
+}
+
+// Extracts lat/lng safely from either {lat, lng} or [lng, lat]
+function parseCenter(center: { lat: number; lng: number } | [number, number]): { lat: number; lng: number } {
+  if (Array.isArray(center)) {
+    return { lat: center[1], lng: center[0] };
+  }
+  return { lat: center.lat, lng: center.lng };
+}
+
+export const generateSimulatedIncident = (center: { lat: number; lng: number } | [number, number]): Incident => {
+  const { lat: baseLat, lng: baseLng } = parseCenter(center);
   
+  // Incidents placed within 1 to 7 km of current location
+  const coords = calculateGeodesicOffset(baseLat, baseLng, 1.0, 7.0);
   const rawText = SOS_MESSAGES[Math.floor(Math.random() * SOS_MESSAGES.length)];
-  
   const triage = fallbackTriage(rawText);
-  
+
   const rand = Math.random();
   let priority: Priority = 'P3_SUPPLIES';
-  if (rand < 0.2) priority = 'P1_CRITICAL';
-  else if (rand < 0.5) priority = 'P2_URGENT';
+  if (rand < 0.25) priority = 'P1_CRITICAL';
+  else if (rand < 0.55) priority = 'P2_URGENT';
   else if (rand < 0.85) priority = 'P3_SUPPLIES';
   else priority = 'P4_INFORMATIONAL';
 
@@ -64,39 +78,38 @@ export const generateSimulatedIncident = (center: {lat: number, lng: number}): I
     id: crypto.randomUUID(),
     rawText,
     triage,
-    lat: center.lat + randomLatOffset,
-    lng: center.lng + randomLngOffset,
-    locationName: triage.extractedLocation,
+    lat: coords.lat,
+    lng: coords.lng,
+    locationName: triage.extractedLocation || 'Local Zone',
     status: 'ACTIVE',
-    createdAt: Date.now() - Math.floor(Math.random() * 3600000), // Within last hour
+    createdAt: Date.now() - Math.floor(Math.random() * 1800000),
     updatedAt: Date.now()
   };
 };
 
-export const generateSimulatedResource = (center: {lat: number, lng: number}): Resource => {
-  const randomLatOffset = (Math.random() - 0.5) * 0.3;
-  const randomLngOffset = (Math.random() - 0.5) * 0.3;
+export const generateSimulatedResource = (center: { lat: number; lng: number } | [number, number], index: number = 0): Resource => {
+  const { lat: baseLat, lng: baseLng } = parseCenter(center);
   
-  const numCapabilities = Math.floor(Math.random() * 3) + 1;
-  const shuffledCaps = [...RESOURCE_CAPABILITIES].sort(() => 0.5 - Math.random());
-  const capabilities = shuffledCaps.slice(0, numCapabilities);
-  
+  // Guarantees emergency facilities are distributed strictly between 2.0 km and 10.0 km
+  const coords = calculateGeodesicOffset(baseLat, baseLng, 2.0, 10.0);
+  const template = EMERGENCY_UNITS[index % EMERGENCY_UNITS.length];
+
   return {
     id: crypto.randomUUID(),
-    name: VOLUNTEER_NAMES[Math.floor(Math.random() * VOLUNTEER_NAMES.length)],
-    lat: center.lat + randomLatOffset,
-    lng: center.lng + randomLngOffset,
-    capabilities,
-    capacityRemaining: Math.floor(Math.random() * 6) + 1,
+    name: template.name,
+    lat: coords.lat,
+    lng: coords.lng,
+    capabilities: template.capabilities,
+    capacityRemaining: Math.floor(Math.random() * 8) + 2,
     isActive: true,
-    phone: `555-${Math.floor(100 + Math.random() * 900)}-${Math.floor(1000 + Math.random() * 9000)}`
+    phone: '112'
   };
 };
 
-export const generateInitialResources = (center: {lat: number, lng: number}, count: number): Resource[] => {
+export const generateInitialResources = (center: { lat: number; lng: number } | [number, number], count: number = 8): Resource[] => {
   const resources: Resource[] = [];
   for (let i = 0; i < count; i++) {
-    resources.push(generateSimulatedResource(center));
+    resources.push(generateSimulatedResource(center, i));
   }
   return resources;
 };
