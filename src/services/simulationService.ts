@@ -1,5 +1,7 @@
 import { Incident, Resource, Priority, ResourceCapability } from '../types';
 import { fallbackTriage } from './triageService';
+import { getReverseGeocodedLocation } from './emergencyPlacesService';
+import { saveIncident } from './offlineDB';
 
 const SOS_MESSAGES = [
   'Flash flood water rising rapidly, 3 people trapped on rooftop, urgent rescue needed',
@@ -57,11 +59,14 @@ function parseCenter(center: { lat: number; lng: number } | [number, number]): {
   return { lat: center.lat, lng: center.lng };
 }
 
-export const generateSimulatedIncident = (center: { lat: number; lng: number } | [number, number]): Incident => {
+export const generateSimulatedIncident = (
+  center: { lat: number; lng: number } | [number, number],
+  defaultLocationName?: string
+): Incident => {
   const { lat: baseLat, lng: baseLng } = parseCenter(center);
   
-  // Incidents placed within 1 to 7 km of current location
-  const coords = calculateGeodesicOffset(baseLat, baseLng, 1.0, 7.0);
+  // Incidents placed within 1 to 6 km of the user's live position
+  const coords = calculateGeodesicOffset(baseLat, baseLng, 1.0, 6.0);
   const rawText = SOS_MESSAGES[Math.floor(Math.random() * SOS_MESSAGES.length)];
   const triage = fallbackTriage(rawText);
 
@@ -74,23 +79,43 @@ export const generateSimulatedIncident = (center: { lat: number; lng: number } |
 
   triage.priority = priority;
 
-  return {
+  const initialLocation =
+    defaultLocationName ||
+    (triage.extractedLocation && triage.extractedLocation !== 'Unknown Location'
+      ? triage.extractedLocation
+      : `Sector (${coords.lat.toFixed(3)}, ${coords.lng.toFixed(3)})`);
+
+  const incident: Incident = {
     id: crypto.randomUUID(),
     rawText,
     triage,
     lat: coords.lat,
     lng: coords.lng,
-    locationName: triage.extractedLocation || 'Local Zone',
+    locationName: initialLocation,
     status: 'ACTIVE',
     createdAt: Date.now() - Math.floor(Math.random() * 1800000),
     updatedAt: Date.now()
   };
+
+  // Asynchronously resolve real town/village name via OpenStreetMap Nominatim
+  getReverseGeocodedLocation(coords.lat, coords.lng).then(async (resolvedName) => {
+    if (resolvedName) {
+      incident.locationName = resolvedName;
+      // Persist updated locality name to offline IndexedDB
+      await saveIncident(incident);
+    }
+  });
+
+  return incident;
 };
 
-export const generateSimulatedResource = (center: { lat: number; lng: number } | [number, number], index: number = 0): Resource => {
+export const generateSimulatedResource = (
+  center: { lat: number; lng: number } | [number, number],
+  index: number = 0
+): Resource => {
   const { lat: baseLat, lng: baseLng } = parseCenter(center);
   
-  // Guarantees emergency facilities are distributed strictly between 2.0 km and 10.0 km
+  // Distributes local emergency response stations strictly between 2.0 km and 10.0 km
   const coords = calculateGeodesicOffset(baseLat, baseLng, 2.0, 10.0);
   const template = EMERGENCY_UNITS[index % EMERGENCY_UNITS.length];
 
@@ -106,7 +131,10 @@ export const generateSimulatedResource = (center: { lat: number; lng: number } |
   };
 };
 
-export const generateInitialResources = (center: { lat: number; lng: number } | [number, number], count: number = 8): Resource[] => {
+export const generateInitialResources = (
+  center: { lat: number; lng: number } | [number, number],
+  count: number = 8
+): Resource[] => {
   const resources: Resource[] = [];
   for (let i = 0; i < count; i++) {
     resources.push(generateSimulatedResource(center, i));
