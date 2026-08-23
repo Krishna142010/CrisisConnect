@@ -71,7 +71,6 @@ export default function App() {
       setAiModelLoaded(isModelLoaded());
       setAiModelLoading(false);
 
-      // Load offline cached data on start
       const savedIncidents = await getAllIncidents();
       const savedResources = await getAllResources();
       setIncidents(savedIncidents);
@@ -149,7 +148,7 @@ export default function App() {
     };
   }, []);
 
-  // Fetch real OpenStreetMap hospitals/emergency facilities for current GPS coordinates
+  // Fetch local facilities for GPS location
   useEffect(() => {
     if (userLat === null || userLng === null) return;
 
@@ -180,23 +179,19 @@ export default function App() {
     loadLocalEmergencyData();
   }, [userLat, userLng]);
 
-  // Recalculate resource-incident allocation matches
   useEffect(() => {
     const newMatches = matchIncidentsToResources(incidents.filter(i => i.status === 'ACTIVE'), resources);
     setMatches(newMatches);
   }, [incidents, resources]);
 
-  // ── KEY FIX: Instant submission & background resource discovery ──
+  // Handle new incident (GPS or Manual Coords)
   const handleNewIncident = useCallback((incident: Incident) => {
-    // 1. Immediately update state and IndexedDB without waiting for network calls
     setIncidents(prev => [incident, ...prev]);
     saveIncident(incident);
 
-    // 2. Immediately switch to map view and focus on the incident
     setActiveTab('map');
     setSelectedIncident(incident);
 
-    // 3. In the background, fetch facilities for the new target area (e.g. NYC / London) and recompute routing
     fetchAndCacheLiveFacilities(incident.lat, incident.lng, 15000)
       .then((extraFacilities) => {
         if (extraFacilities && extraFacilities.length > 0) {
@@ -205,7 +200,6 @@ export default function App() {
             const newlyDiscovered = extraFacilities.filter(f => !existingIds.has(f.id));
             const merged = [...newlyDiscovered, ...prev];
 
-            // Recompute dispatch routing matches with the newly discovered facilities
             const directMatches = matchIncidentsToResources([incident], merged);
             setMatches(prevMatches => {
               const filtered = prevMatches.filter(m => m.incidentId !== incident.id);
@@ -218,7 +212,22 @@ export default function App() {
       })
       .catch((err) => console.warn('Background facilities fetch error:', err));
   }, []);
-  
+
+  // Defined callback to resolve incidents
+  const handleResolveIncident = useCallback((id: string) => {
+    setIncidents(prev => prev.map(inc => inc.id === id ? { ...inc, status: 'RESOLVED', updatedAt: Date.now() } : inc));
+    const updateDb = async () => {
+      const all = await getAllIncidents();
+      const target = all.find(i => i.id === id);
+      if (target) {
+        target.status = 'RESOLVED';
+        target.updatedAt = Date.now();
+        await saveIncident(target);
+      }
+    };
+    updateDb();
+  }, []);
+
   const handleStartSimulation = useCallback(() => {
     setIsSimulating(true);
     setSimulationEventsGenerated(0);
@@ -340,7 +349,7 @@ export default function App() {
         )}
       </div>
 
-      {/* ── Floating Action Buttons (Bottom Right) ── */}
+      {/* Floating Action Buttons */}
       <div 
         style={{ 
           position: 'fixed', 
@@ -353,7 +362,6 @@ export default function App() {
           zIndex: 999 
         }}
       >
-        {/* 1. AI Assistant Button */}
         <button
           onClick={() => setIsAIChatOpen(true)}
           title="Talk with AI Assistant"
@@ -362,7 +370,6 @@ export default function App() {
           🤖
         </button>
 
-        {/* 2. Bluetooth Mesh Chat Button */}
         <button
           onClick={() => setIsPeerChatOpen(true)}
           title="Bluetooth Mesh Chat"
@@ -371,7 +378,6 @@ export default function App() {
           📡
         </button>
 
-        {/* 3. Emergency Numbers & Facilities Button */}
         <button
           onClick={() => setIsEmergencyNumbersOpen(true)}
           title="Emergency Helplines & Nearby Centers"
@@ -380,7 +386,6 @@ export default function App() {
           📞
         </button>
 
-        {/* 4. SOS Emergency Report Button */}
         <button 
           onClick={() => setIsReportModalOpen(true)} 
           title="Report Emergency"
