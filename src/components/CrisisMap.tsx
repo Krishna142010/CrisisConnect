@@ -12,6 +12,7 @@ interface CrisisMapProps {
   onSelectIncident: (incident: Incident | null) => void;
   filters: { priorities: Priority[]; categories: Category[] };
   matches: MatchRecommendation[];
+  userLocation?: [number, number] | null; // [lng, lat]
 }
 
 export function CrisisMap({
@@ -21,26 +22,32 @@ export function CrisisMap({
   selectedIncident,
   onSelectIncident,
   filters,
-  matches
+  matches,
+  userLocation
 }: CrisisMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
+  const userMarkerRef = useRef<maplibregl.Marker | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const incidentsRef = useRef(incidents);
   const onSelectRef = useRef(onSelectIncident);
+  const hasInitiallyCentered = useRef(false);
 
-  // Keep refs up to date with latest props
   incidentsRef.current = incidents;
   onSelectRef.current = onSelectIncident;
 
   useEffect(() => {
     if (map.current || !mapContainer.current) return;
     
+    // Fallback coordinates if userLocation is not yet available
+    const initialLng = userLocation ? userLocation[0] : (typeof DEFAULT_CENTER === 'object' && 'lng' in DEFAULT_CENTER ? (DEFAULT_CENTER as any).lng : 0);
+    const initialLat = userLocation ? userLocation[1] : (typeof DEFAULT_CENTER === 'object' && 'lat' in DEFAULT_CENTER ? (DEFAULT_CENTER as any).lat : 0);
+
     map.current = new maplibregl.Map({
       container: mapContainer.current,
       style: MAP_STYLE,
-      center: [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat],
-      zoom: DEFAULT_ZOOM
+      center: [initialLng, initialLat],
+      zoom: userLocation ? 13 : DEFAULT_ZOOM
     });
 
     map.current.addControl(new maplibregl.NavigationControl(), 'top-right');
@@ -48,7 +55,6 @@ export function CrisisMap({
     map.current.on('load', () => {
       setMapLoaded(true);
 
-      // Add sources
       map.current!.addSource('incidents', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -75,7 +81,6 @@ export function CrisisMap({
         data: { type: 'FeatureCollection', features: [] }
       });
 
-      // Add layers
       map.current!.addLayer({
         id: 'clusters',
         type: 'circle',
@@ -156,7 +161,6 @@ export function CrisisMap({
         }
       });
 
-      // Interactions
       map.current!.on('click', 'clusters', async (e) => {
         const features = map.current!.queryRenderedFeatures(e.point, { layers: ['clusters'] });
         if (!features.length) return;
@@ -199,6 +203,37 @@ export function CrisisMap({
       map.current?.remove();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-center on user's live position and attach a beacon marker
+  useEffect(() => {
+    if (!map.current || !userLocation) return;
+
+    if (!userMarkerRef.current) {
+      const el = document.createElement('div');
+      el.className = 'user-live-marker';
+      el.style.width = '16px';
+      el.style.height = '16px';
+      el.style.backgroundColor = '#38bdf8';
+      el.style.borderRadius = '50%';
+      el.style.boxShadow = '0 0 0 6px rgba(56, 189, 248, 0.4)';
+      el.style.border = '2px solid #ffffff';
+
+      userMarkerRef.current = new maplibregl.Marker({ element: el })
+        .setLngLat(userLocation)
+        .addTo(map.current);
+    } else {
+      userMarkerRef.current.setLngLat(userLocation);
+    }
+
+    if (!hasInitiallyCentered.current) {
+      map.current.flyTo({
+        center: userLocation,
+        zoom: 13,
+        essential: true
+      });
+      hasInitiallyCentered.current = true;
+    }
+  }, [userLocation, mapLoaded]);
 
   useEffect(() => {
     if (!mapLoaded || !map.current) return;
