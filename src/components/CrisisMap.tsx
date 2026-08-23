@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Incident, Resource, ExternalEvent, MatchRecommendation, Priority, Category, PRIORITY_CONFIG } from '../types';
-import { MAP_STYLE, DEFAULT_CENTER, DEFAULT_ZOOM } from '../utils/constants';
+import { MAP_STYLE } from '../utils/constants';
 
 interface CrisisMapProps {
   incidents: Incident[];
@@ -38,14 +38,14 @@ export function CrisisMap({
   useEffect(() => {
     if (map.current || !mapContainer.current) return;
 
-    const startLng = userLocation ? userLocation[0] : (typeof DEFAULT_CENTER === 'object' && 'lng' in DEFAULT_CENTER ? (DEFAULT_CENTER as any).lng : 78.57);
-    const startLat = userLocation ? userLocation[1] : (typeof DEFAULT_CENTER === 'object' && 'lat' in DEFAULT_CENTER ? (DEFAULT_CENTER as any).lat : 28.58);
+    const initialLng = userLocation ? userLocation[0] : 78.57;
+    const initialLat = userLocation ? userLocation[1] : 28.58;
 
     map.current = new maplibregl.Map({
       container: mapContainer.current,
       style: MAP_STYLE,
-      center: [startLng, startLat],
-      zoom: userLocation ? 12.5 : DEFAULT_ZOOM
+      center: [initialLng, initialLat],
+      zoom: 13
     });
 
     map.current.addControl(new maplibregl.NavigationControl(), 'top-right');
@@ -53,7 +53,6 @@ export function CrisisMap({
     map.current.on('load', () => {
       setMapLoaded(true);
 
-      // Sources
       map.current!.addSource('incidents', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -77,21 +76,20 @@ export function CrisisMap({
         data: { type: 'FeatureCollection', features: [] }
       });
 
-      // 1. External Global Hazard Events (Purple)
+      // 1. External Global Disaster Feeds
       map.current!.addLayer({
         id: 'events-layer',
         type: 'circle',
         source: 'events',
         paint: {
           'circle-color': '#a855f7',
-          'circle-radius': 7,
+          'circle-radius': 6,
           'circle-stroke-width': 1.5,
-          'circle-stroke-color': '#ffffff',
-          'circle-opacity': 0.8
+          'circle-stroke-color': '#ffffff'
         }
       });
 
-      // 2. Incident Clusters & Points (Red / Orange / Yellow)
+      // 2. Incident Clusters
       map.current!.addLayer({
         id: 'clusters',
         type: 'circle',
@@ -125,13 +123,13 @@ export function CrisisMap({
         filter: ['!', ['has', 'point_count']],
         paint: {
           'circle-color': ['get', 'color'],
-          'circle-radius': 9,
-          'circle-stroke-width': 2.5,
+          'circle-radius': 8,
+          'circle-stroke-width': 2,
           'circle-stroke-color': '#ffffff'
         }
       });
 
-      // 3. Local Emergency Services & Facilities Layer (Bright Emerald Green)
+      // 3. Emergency Facilities Layer (Hospitals, Nursing Homes, Police, Fire)
       map.current!.addLayer({
         id: 'resources-layer',
         type: 'circle',
@@ -152,17 +150,17 @@ export function CrisisMap({
           'text-field': '{name}',
           'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
           'text-size': 11,
-          'text-offset': [0, 1.3],
+          'text-offset': [0, 1.4],
           'text-anchor': 'top'
         },
         paint: {
-          'text-color': '#34d399',
+          'text-color': '#6ee7b7',
           'text-halo-color': '#0f172a',
           'text-halo-width': 2
         }
       });
 
-      // 4. Dispatch Match Routing Lines
+      // 4. Dispatch Match Lines
       map.current!.addLayer({
         id: 'matches-layer',
         type: 'line',
@@ -174,7 +172,6 @@ export function CrisisMap({
         }
       });
 
-      // Click Interactions
       map.current!.on('click', 'unclustered-point', (e) => {
         const feature = e.features![0];
         const incidentId = feature.properties!.id;
@@ -188,15 +185,14 @@ export function CrisisMap({
     };
   }, []);
 
-  // Center camera directly onto user's location with street/city zoom
+  // Center camera directly into user location with zoom level 13
   useEffect(() => {
     if (!map.current || !userLocation) return;
 
     if (!userMarkerRef.current) {
       const el = document.createElement('div');
-      el.className = 'user-beacon';
-      el.style.width = '18px';
-      el.style.height = '18px';
+      el.style.width = '20px';
+      el.style.height = '20px';
       el.style.backgroundColor = '#38bdf8';
       el.style.borderRadius = '50%';
       el.style.boxShadow = '0 0 0 8px rgba(56, 189, 248, 0.4)';
@@ -211,12 +207,11 @@ export function CrisisMap({
 
     map.current.flyTo({
       center: userLocation,
-      zoom: 12.5,
+      zoom: 13,
       essential: true
     });
   }, [userLocation, mapLoaded]);
 
-  // Sync Incidents
   useEffect(() => {
     if (!mapLoaded || !map.current) return;
     const filteredIncidents = incidents.filter(i =>
@@ -241,7 +236,6 @@ export function CrisisMap({
     });
   }, [incidents, filters, mapLoaded]);
 
-  // Sync Resources
   useEffect(() => {
     if (!mapLoaded || !map.current) return;
     const resourceFeatures = resources.map(r => ({
@@ -256,7 +250,6 @@ export function CrisisMap({
     });
   }, [resources, mapLoaded]);
 
-  // Sync Matches
   useEffect(() => {
     if (!mapLoaded || !map.current) return;
     const matchFeatures = matches.map(match => {
@@ -280,7 +273,6 @@ export function CrisisMap({
     });
   }, [matches, incidents, resources, mapLoaded]);
 
-  // Sync External Events
   useEffect(() => {
     if (!mapLoaded || !map.current) return;
     const eventFeatures = externalEvents.map(evt => ({
