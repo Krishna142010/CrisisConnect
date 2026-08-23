@@ -25,24 +25,24 @@ export default function App() {
   const [matches, setMatches] = useState<MatchRecommendation[]>([]);
   const [externalEvents, setExternalEvents] = useState<ExternalEvent[]>([]);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
-  
+
   const [activeTab, setActiveTab] = useState<'map' | 'dashboard' | 'resources'>('map');
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-  
+
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
-  
+
   const [isSimulating, setIsSimulating] = useState(false);
   const [isDevMode, setIsDevMode] = useState(false);
-  
+
   const [aiModelLoaded, setAiModelLoaded] = useState(false);
   const [aiModelLoading, setAiModelLoading] = useState(true);
-  
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  
+
   const [simulationProgress, setSimulationProgress] = useState(0);
   const [simulationEventsGenerated, setSimulationEventsGenerated] = useState(0);
-  
+
   const [filters, setFilters] = useState<{ priorities: Priority[], categories: Category[] }>({
     priorities: ['P1_CRITICAL', 'P2_URGENT', 'P3_SUPPLIES', 'P4_INFORMATIONAL'],
     categories: ['RESCUE', 'MEDICAL', 'FOOD_WATER', 'SHELTER', 'HAZARD']
@@ -149,17 +149,15 @@ export default function App() {
     };
   }, []);
 
-  // Fetch real OpenStreetMap hospitals/emergency facilities & cache for offline usage
+  // Fetch real OpenStreetMap hospitals/emergency facilities for current GPS coordinates
   useEffect(() => {
     if (userLat === null || userLng === null) return;
 
     const loadLocalEmergencyData = async () => {
       try {
-        // 1. Fetch real hospitals, nursing homes, fire, police via OpenStreetMap Overpass API
-        const facilities = await fetchAndCacheLiveFacilities(userLat, userLng, 12000);
+        const facilities = await fetchAndCacheLiveFacilities(userLat, userLng, 15000);
         setResources(facilities);
 
-        // 2. Generate initial local incidents if empty
         const currentIncidents = await getAllIncidents();
         if (currentIncidents.length === 0) {
           const initialIncidents = [
@@ -188,28 +186,37 @@ export default function App() {
     setMatches(newMatches);
   }, [incidents, resources]);
 
-  // ── KEY FEATURE: Handle new incident submission (GPS or Manual Coords) ──
+  // ── KEY FIX: Eagerly fetch target facilities BEFORE selecting incident ──
   const handleNewIncident = useCallback(async (incident: Incident) => {
-    // 1. Add to incident list & save to IndexedDB
-    setIncidents(prev => [incident, ...prev]);
-    await saveIncident(incident);
-
-    // 2. Automatically switch to map and select the incident so CrisisMap frames it with the nearest facility
-    setActiveTab('map');
-    setSelectedIncident(incident);
-
-    // 3. If the coordinates are far from known facilities, fetch & append new facilities around that spot
+    // 1. Immediately fetch & cache local emergency facilities around target coordinates (e.g. NYC / London / Delhi)
+    let updatedResources = resources;
     try {
-      const extraFacilities = await fetchAndCacheLiveFacilities(incident.lat, incident.lng, 12000);
-      setResources(prev => {
-        const existingIds = new Set(prev.map(r => r.id));
+      const extraFacilities = await fetchAndCacheLiveFacilities(incident.lat, incident.lng, 15000);
+      if (extraFacilities.length > 0) {
+        const existingIds = new Set(resources.map(r => r.id));
         const newlyDiscovered = extraFacilities.filter(f => !existingIds.has(f.id));
-        return [...prev, ...newlyDiscovered];
-      });
+        updatedResources = [...newlyDiscovered, ...resources];
+        setResources(updatedResources);
+      }
     } catch (err) {
       console.warn('Could not query facilities around incident coordinates:', err);
     }
-  }, []);
+
+    // 2. Persist incident
+    setIncidents(prev => [incident, ...prev]);
+    await saveIncident(incident);
+
+    // 3. Immediately recompute matches with the newly added local facilities
+    const directMatches = matchIncidentsToResources([incident], updatedResources);
+    setMatches(prev => {
+      const filtered = prev.filter(m => m.incidentId !== incident.id);
+      return [...directMatches, ...filtered];
+    });
+
+    // 4. Switch to map view and focus directly on the incident with its local matched facility
+    setActiveTab('map');
+    setSelectedIncident(incident);
+  }, [resources]);
 
   const handleResolveIncident = useCallback((id: string) => {
     setIncidents(prev => prev.map(inc => inc.id === id ? { ...inc, status: 'RESOLVED', updatedAt: Date.now() } : inc));
@@ -235,7 +242,7 @@ export default function App() {
       count++;
       const newInc = generateSimulatedIncident(currentCenter as any);
       handleNewIncident(newInc);
-      
+
       setSimulationEventsGenerated(count);
       setSimulationProgress((count / SIMULATION_TOTAL_EVENTS) * 100);
 
@@ -274,7 +281,7 @@ export default function App() {
         isSidebarOpen={isSidebarOpen}
       />
       <OfflineIndicator isOnline={isOnline} pendingSyncCount={pendingSyncCount} />
-      
+
       <div className="app-body" style={{ flex: 1, position: 'relative', display: 'flex', overflow: 'hidden' }}>
         {activeTab === 'map' && (
           <div className="map-container" style={{ flex: 1, position: 'relative' }}>
@@ -296,13 +303,13 @@ export default function App() {
             />
           </div>
         )}
-        
+
         {activeTab === 'dashboard' && (
           <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
             <Dashboard incidents={incidents} resources={resources} matches={matches} />
           </div>
         )}
-        
+
         {activeTab === 'resources' && (
           <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
             <h2 className="accent-text" style={{ marginBottom: '16px', color: 'white' }}>Active Volunteers & Emergency Facilities</h2>
@@ -345,8 +352,8 @@ export default function App() {
           />
         )}
       </div>
-      
-      {/* ── Fixed Floating Action Button Stack (Bottom Right) ── */}
+
+      {/* ── Floating Action Buttons (Bottom Right) ── */}
       <div 
         style={{ 
           position: 'fixed', 
@@ -410,7 +417,7 @@ export default function App() {
           🆘
         </button>
       </div>
-      
+
       {/* Modals */}
       <AIChatModal
         isOpen={isAIChatOpen}
@@ -440,7 +447,7 @@ export default function App() {
         userLat={userLat}
         userLng={userLng}
       />
-      
+
       <SimulationControls 
         isVisible={isDevMode}
         isSimulating={isSimulating}
@@ -450,7 +457,7 @@ export default function App() {
         progress={simulationProgress}
         eventsGenerated={simulationEventsGenerated}
       />
-      
+
       {aiModelLoading && (
         <div className="model-loading" style={{ position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)', backgroundColor: 'rgba(31, 41, 55, 0.9)', padding: '8px 16px', borderRadius: '24px', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 100, color: 'white', fontSize: '0.875rem' }}>
           <div className="loading-spinner" style={{ width: '16px', height: '16px', border: '2px solid #3b82f6', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
