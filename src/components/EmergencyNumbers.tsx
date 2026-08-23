@@ -48,7 +48,6 @@ export function EmergencyNumbers({ isOpen, onClose, userLat, userLng }: Emergenc
   const [detectedCountryCode, setDetectedCountryCode] = useState<string | null>(null);
   const [detectedCountryName, setDetectedCountryName] = useState<string | null>(null);
 
-  // Dynamic OpenStreetMap Reverse Geocoding to determine Country
   useEffect(() => {
     if (!isOpen || userLat === null || userLng === null) return;
 
@@ -63,37 +62,33 @@ export function EmergencyNumbers({ isOpen, onClose, userLat, userLng }: Emergenc
           setDetectedCountryName(data.address.country || 'Detected Region');
         }
       } catch (err) {
-        console.warn('OpenStreetMap reverse geocode failed, using local lookup:', err);
+        console.warn('Reverse geocode failed:', err);
       }
     };
 
     resolveCountry();
   }, [isOpen, userLat, userLng]);
 
-  // Load nearby facilities via Overpass API
   useEffect(() => {
     if (isOpen && activeTab === 'facilities' && userLat !== null && userLng !== null) {
       setIsLoadingPlaces(true);
       fetchNearbyEmergencyPlaces(userLat, userLng, 15000)
-        .then((res) => setPlaces(res))
+        .then((res: EmergencyPlace[]) => setPlaces(res))
         .finally(() => setIsLoadingPlaces(false));
     }
   }, [isOpen, activeTab, userLat, userLng]);
 
   const emergencyData: CountryEmergency = useMemo(() => {
-    // 1. Check dynamic OSM country code first
     if (detectedCountryCode) {
       const data = getEmergencyNumbers(detectedCountryCode);
       if (data) return data;
     }
 
-    // 2. Check coordinates bounding lookup
     if (userLat !== null && userLng !== null) {
       const countryCode = getCountryFromCoordinates(userLat, userLng);
       const data = getEmergencyNumbers(countryCode);
       if (data) return data;
 
-      // Built-in Indian subcontinental bounding fallback
       if (userLat >= 8.0 && userLat <= 37.0 && userLng >= 68.0 && userLng <= 97.5) {
         const inData = getEmergencyNumbers('IN');
         if (inData) return inData;
@@ -108,7 +103,7 @@ export function EmergencyNumbers({ isOpen, onClose, userLat, userLng }: Emergenc
   const isGlobal = emergencyData.countryCode === 'GLOBAL' && !detectedCountryName;
   const filteredPlaces = facilityFilter === 'ALL'
     ? places
-    : places.filter((p) => p.type === facilityFilter || (facilityFilter === 'hospital' && p.type === 'clinic'));
+    : places.filter((p) => p.type === facilityFilter || (facilityFilter === 'hospital' && (p.type === 'clinic' || p.type === 'nursing_home')));
 
   return (
     <div 
@@ -155,7 +150,6 @@ export function EmergencyNumbers({ isOpen, onClose, userLat, userLng }: Emergenc
             </div>
           </div>
 
-          {/* Sub Navigation Tabs */}
           <div className="flex gap-2 mt-4 bg-gray-900 p-1 rounded-xl border border-gray-700">
             <button
               onClick={() => setActiveTab('hotlines')}
@@ -179,7 +173,6 @@ export function EmergencyNumbers({ isOpen, onClose, userLat, userLng }: Emergenc
         {/* Tab 1: Helplines */}
         {activeTab === 'hotlines' && (
           <div className="p-6 flex flex-col gap-6 overflow-y-auto">
-            {/* Main Emergency Call Action */}
             <div className="flex flex-col items-center p-8 bg-gray-900 rounded-xl border border-gray-700 shadow-inner">
               <span className="text-gray-400 text-sm uppercase tracking-wider font-semibold mb-2">Primary Emergency Number</span>
               <span className="text-6xl font-black text-white mb-6 tracking-widest">{emergencyData.generalEmergency}</span>
@@ -194,7 +187,6 @@ export function EmergencyNumbers({ isOpen, onClose, userLat, userLng }: Emergenc
 
             <div className="h-px bg-gray-700 w-full my-1"></div>
 
-            {/* Contacts Grid */}
             <h3 className="text-lg font-semibold text-gray-300 px-1">Specialized Emergency Lines</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {emergencyData.contacts.map((contact: EmergencyContact, index: number) => (
@@ -232,10 +224,9 @@ export function EmergencyNumbers({ isOpen, onClose, userLat, userLng }: Emergenc
           </div>
         )}
 
-        {/* Tab 2: Nearby OpenStreetMap Facilities */}
+        {/* Tab 2: Facilities */}
         {activeTab === 'facilities' && (
           <div className="p-6 flex flex-col gap-4 overflow-y-auto">
-            {/* Filter Bar */}
             <div className="flex gap-2 overflow-x-auto pb-2">
               {(['ALL', 'hospital', 'police', 'fire_station'] as const).map((filter) => (
                 <button
@@ -269,7 +260,7 @@ export function EmergencyNumbers({ isOpen, onClose, userLat, userLng }: Emergenc
               >
                 <div>
                   <div className="flex items-center gap-2 font-bold text-white text-base">
-                    {place.type === 'hospital' || place.type === 'clinic' ? (
+                    {place.type === 'hospital' || place.type === 'clinic' || place.type === 'nursing_home' ? (
                       <Heart size={18} className="text-red-400" />
                     ) : place.type === 'police' ? (
                       <Shield size={18} className="text-blue-400" />
