@@ -8,6 +8,11 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'robots.txt'],
+      workbox: {
+        // Increase precache size limit to 30 MiB for ONNX WASM binaries and bundles
+        maximumFileSizeToCacheInBytes: 30 * 1024 * 1024,
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm}']
+      },
       manifest: {
         name: 'CrisisConnect',
         short_name: 'CrisisConnect',
@@ -21,7 +26,7 @@ export default defineConfig({
   ],
   build: {
     target: 'esnext',
-    chunkSizeWarningLimit: 2000
+    chunkSizeWarningLimit: 3000
   },
   optimizeDeps: {
     exclude: ['@huggingface/transformers']
