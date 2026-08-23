@@ -1,0 +1,190 @@
+import React, { useState } from 'react';
+import { Incident, TriageResult } from '../types';
+import { triageReport, getAIMode } from '../services/triageService';
+
+interface ReportModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (incident: Incident) => void;
+  aiModelLoaded: boolean;
+}
+
+export function ReportModal({ isOpen, onClose, onSubmit, aiModelLoaded }: ReportModalProps) {
+  const [reportText, setReportText] = useState('');
+  const [isTriaging, setIsTriaging] = useState(false);
+  const [triageResult, setTriageResult] = useState<TriageResult | null>(null);
+  const [useMyLocation, setUseMyLocation] = useState(true);
+  const [manualLat, setManualLat] = useState('');
+  const [manualLng, setManualLng] = useState('');
+  const [locationName, setLocationName] = useState('');
+  const [step, setStep] = useState<'input' | 'review' | 'submitted'>('input');
+  const [userLat, setUserLat] = useState<number | null>(null);
+  const [userLng, setUserLng] = useState<number | null>(null);
+  const [geoStatus, setGeoStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+
+  if (!isOpen) return null;
+
+  const handleGetLocation = () => {
+    setUseMyLocation(true);
+    setGeoStatus('loading');
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLat(position.coords.latitude);
+          setUserLng(position.coords.longitude);
+          setGeoStatus('success');
+        },
+        (err) => {
+          console.error('Geolocation error:', err);
+          setGeoStatus('error');
+          // Fall back to default center
+          setUserLat(29.7604);
+          setUserLng(-95.3698);
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    } else {
+      setGeoStatus('error');
+      setUserLat(29.7604);
+      setUserLng(-95.3698);
+    }
+  };
+
+  const handleAnalyze = async () => {
+    setIsTriaging(true);
+    try {
+      const result = await triageReport(reportText);
+      setTriageResult(result);
+      setStep('review');
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsTriaging(false);
+    }
+  };
+
+  const getLat = (): number => {
+    if (useMyLocation && userLat !== null) return userLat;
+    if (!useMyLocation && manualLat) return parseFloat(manualLat) || 29.7604;
+    return 29.7604 + (Math.random() - 0.5) * 0.05;
+  };
+
+  const getLng = (): number => {
+    if (useMyLocation && userLng !== null) return userLng;
+    if (!useMyLocation && manualLng) return parseFloat(manualLng) || -95.3698;
+    return -95.3698 + (Math.random() - 0.5) * 0.05;
+  };
+
+  const handleConfirm = () => {
+    if (!triageResult) return;
+    const incident: Incident = {
+      id: crypto.randomUUID(),
+      rawText: reportText,
+      triage: triageResult,
+      lat: getLat(),
+      lng: getLng(),
+      locationName: locationName || triageResult.extractedLocation || 'Unknown',
+      status: 'ACTIVE',
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    onSubmit(incident);
+    setStep('submitted');
+    setTimeout(() => {
+      onClose();
+      setStep('input');
+      setReportText('');
+      setTriageResult(null);
+      setUserLat(null);
+      setUserLng(null);
+      setGeoStatus('idle');
+    }, 2000);
+  };
+
+  return (
+    <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+      <div className="modal-content glass-card" style={{ width: '90%', maxWidth: '500px', backgroundColor: '#1f2937', borderRadius: '12px', overflow: 'hidden', padding: '24px' }}>
+        {step === 'input' && (
+          <>
+            <div className="modal-header" style={{ marginBottom: '20px' }}>
+              <h2 style={{ color: '#ef4444', margin: 0, fontSize: '1.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span role="img" aria-label="sos">🆘</span> Report Emergency
+              </h2>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="form-group">
+                <label className="form-label" style={{ display: 'block', marginBottom: '8px', color: '#d1d5db' }}>Describe the emergency</label>
+                <textarea
+                  className="form-textarea"
+                  value={reportText}
+                  onChange={(e) => setReportText(e.target.value)}
+                  placeholder="Describe the emergency... e.g., 'Water rising fast at 123 Main St, family of 4 trapped on 2nd floor, need rescue boat'"
+                  rows={4}
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #374151', backgroundColor: '#111827', color: 'white' }}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label" style={{ display: 'block', marginBottom: '8px', color: '#d1d5db' }}>Location</label>
+                <div style={{ display: 'flex', gap: '12px', marginBottom: '8px' }}>
+                  <button className={`btn ${useMyLocation ? 'btn-primary' : 'btn-ghost'}`} onClick={handleGetLocation} style={{ padding: '8px 16px', borderRadius: '6px' }}>
+                    📍 {geoStatus === 'loading' ? 'Getting Location...' : geoStatus === 'success' ? 'Location Found ✓' : 'Use My Location'}
+                  </button>
+                  <button className={`btn ${!useMyLocation ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setUseMyLocation(false)} style={{ padding: '8px 16px', borderRadius: '6px' }}>Manual Entry</button>
+                </div>
+                {!useMyLocation && (
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                    <input className="form-input" placeholder="Lat" value={manualLat} onChange={e => setManualLat(e.target.value)} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: 'white' }} />
+                    <input className="form-input" placeholder="Lng" value={manualLng} onChange={e => setManualLng(e.target.value)} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #374151', backgroundColor: '#111827', color: 'white' }} />
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="modal-footer" style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <button className="btn btn-primary" onClick={handleAnalyze} disabled={!reportText || isTriaging} style={{ width: '100%', padding: '12px', borderRadius: '8px', backgroundColor: '#3b82f6', color: 'white', fontWeight: 'bold' }}>
+                {isTriaging ? 'Analyzing...' : 'Analyze & Submit'}
+              </button>
+              <div style={{ fontSize: '0.75rem', textAlign: 'center', color: '#9ca3af', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: getAIMode() === 'featherless' ? '#6366f1' : getAIMode() === 'transformers' ? '#22c55e' : '#eab308' }}></span>
+                {getAIMode() === 'featherless' ? '✨ Featherless AI (Online)' : getAIMode() === 'transformers' ? '🧠 Offline AI (Local)' : '⚡ Rule-based (Instant)'}
+              </div>
+              <button className="btn btn-ghost" onClick={onClose} style={{ width: '100%', padding: '12px', borderRadius: '8px', color: '#9ca3af' }}>Cancel</button>
+            </div>
+          </>
+        )}
+
+        {step === 'review' && triageResult && (
+          <>
+            <div className="modal-header" style={{ marginBottom: '20px' }}>
+              <h2 style={{ color: '#f3f4f6', margin: 0, fontSize: '1.25rem' }}>Review Report</h2>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ backgroundColor: '#111827', padding: '16px', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span className="priority-badge" style={{ backgroundColor: '#ef4444', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '0.75rem' }}>{triageResult.priority}</span>
+                  <span style={{ color: '#9ca3af', fontSize: '0.875rem' }}>{triageResult.category}</span>
+                </div>
+                <p style={{ color: '#f3f4f6', fontSize: '0.875rem', margin: '8px 0' }}>{triageResult.summary}</p>
+                <div style={{ display: 'flex', gap: '16px', fontSize: '0.75rem', color: '#9ca3af' }}>
+                  <span>People: {triageResult.peopleCount}</span>
+                  {triageResult.hasMedicalCondition && <span style={{ color: '#ef4444' }}>Medical Need</span>}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#9ca3af' }}>Location: {triageResult.extractedLocation}</div>
+              </div>
+            </div>
+            <div className="modal-footer" style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
+              <button className="btn btn-ghost" onClick={() => setStep('input')} style={{ flex: 1, padding: '12px', borderRadius: '8px', color: '#9ca3af' }}>Edit</button>
+              <button className="btn btn-primary" onClick={handleConfirm} style={{ flex: 2, padding: '12px', borderRadius: '8px', backgroundColor: '#3b82f6', color: 'white', fontWeight: 'bold' }}>Confirm & Report</button>
+            </div>
+          </>
+        )}
+
+        {step === 'submitted' && (
+          <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
+            <h3 style={{ color: '#22c55e', margin: 0, fontSize: '1.25rem' }}>Report Submitted!</h3>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
