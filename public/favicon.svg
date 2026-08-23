@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6366f1"/>
+      <stop offset="1" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="pulse" x1="16" y1="16" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ef4444"/>
+      <stop offset="1" stop-color="#f97316"/>
+    </linearGradient>
+  </defs>
+  <!-- Circle background -->
+  <circle cx="32" cy="32" r="30" fill="url(#bg)" opacity="0.9"/>
+  <!-- Cross/Plus symbol -->
+  <rect x="28" y="14" width="8" height="36" rx="4" fill="white"/>
+  <rect x="14" y="28" width="36" height="8" rx="4" fill="white"/>
+  <!-- Signal rings -->
+  <path d="M12 12 C12 12, 8 20, 8 32 C8 44, 12 52, 12 52" stroke="url(#pulse)" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.7"/>
+  <path d="M52 12 C52 12, 56 20, 56 32 C56 44, 52 52, 52 52" stroke="url(#pulse)" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.7"/>
+</svg>
