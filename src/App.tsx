@@ -186,52 +186,39 @@ export default function App() {
     setMatches(newMatches);
   }, [incidents, resources]);
 
-  // ── KEY FIX: Eagerly fetch target facilities BEFORE selecting incident ──
-  const handleNewIncident = useCallback(async (incident: Incident) => {
-    // 1. Immediately fetch & cache local emergency facilities around target coordinates (e.g. NYC / London / Delhi)
-    let updatedResources = resources;
-    try {
-      const extraFacilities = await fetchAndCacheLiveFacilities(incident.lat, incident.lng, 15000);
-      if (extraFacilities.length > 0) {
-        const existingIds = new Set(resources.map(r => r.id));
-        const newlyDiscovered = extraFacilities.filter(f => !existingIds.has(f.id));
-        updatedResources = [...newlyDiscovered, ...resources];
-        setResources(updatedResources);
-      }
-    } catch (err) {
-      console.warn('Could not query facilities around incident coordinates:', err);
-    }
-
-    // 2. Persist incident
+  // ── KEY FIX: Instant submission & background resource discovery ──
+  const handleNewIncident = useCallback((incident: Incident) => {
+    // 1. Immediately update state and IndexedDB without waiting for network calls
     setIncidents(prev => [incident, ...prev]);
-    await saveIncident(incident);
+    saveIncident(incident);
 
-    // 3. Immediately recompute matches with the newly added local facilities
-    const directMatches = matchIncidentsToResources([incident], updatedResources);
-    setMatches(prev => {
-      const filtered = prev.filter(m => m.incidentId !== incident.id);
-      return [...directMatches, ...filtered];
-    });
-
-    // 4. Switch to map view and focus directly on the incident with its local matched facility
+    // 2. Immediately switch to map view and focus on the incident
     setActiveTab('map');
     setSelectedIncident(incident);
-  }, [resources]);
 
-  const handleResolveIncident = useCallback((id: string) => {
-    setIncidents(prev => prev.map(inc => inc.id === id ? { ...inc, status: 'RESOLVED', updatedAt: Date.now() } : inc));
-    const updateDb = async () => {
-      const all = await getAllIncidents();
-      const target = all.find(i => i.id === id);
-      if (target) {
-        target.status = 'RESOLVED';
-        target.updatedAt = Date.now();
-        await saveIncident(target);
-      }
-    };
-    updateDb();
+    // 3. In the background, fetch facilities for the new target area (e.g. NYC / London) and recompute routing
+    fetchAndCacheLiveFacilities(incident.lat, incident.lng, 15000)
+      .then((extraFacilities) => {
+        if (extraFacilities && extraFacilities.length > 0) {
+          setResources((prev) => {
+            const existingIds = new Set(prev.map(r => r.id));
+            const newlyDiscovered = extraFacilities.filter(f => !existingIds.has(f.id));
+            const merged = [...newlyDiscovered, ...prev];
+
+            // Recompute dispatch routing matches with the newly discovered facilities
+            const directMatches = matchIncidentsToResources([incident], merged);
+            setMatches(prevMatches => {
+              const filtered = prevMatches.filter(m => m.incidentId !== incident.id);
+              return [...directMatches, ...filtered];
+            });
+
+            return merged;
+          });
+        }
+      })
+      .catch((err) => console.warn('Background facilities fetch error:', err));
   }, []);
-
+  
   const handleStartSimulation = useCallback(() => {
     setIsSimulating(true);
     setSimulationEventsGenerated(0);
