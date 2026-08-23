@@ -46,13 +46,17 @@ export default function App() {
     categories: ['RESCUE', 'MEDICAL', 'FOOD_WATER', 'SHELTER', 'HAZARD']
   });
 
-  // Location and helper states
   const [isEmergencyNumbersOpen, setIsEmergencyNumbersOpen] = useState(false);
   const [isPeerChatOpen, setIsPeerChatOpen] = useState(false);
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
 
   const simulationIntervalRef = useRef<number | null>(null);
+
+  // Determine current active coordinate center
+  const currentCenter = (userLat !== null && userLng !== null)
+    ? { lat: userLat, lng: userLng }
+    : DEFAULT_CENTER;
 
   useEffect(() => {
     const initApp = async () => {
@@ -69,7 +73,7 @@ export default function App() {
       setIncidents(savedIncidents);
       
       if (savedResources.length === 0) {
-        const initialResources = generateInitialResources(DEFAULT_CENTER, 15);
+        const initialResources = generateInitialResources(currentCenter as any, 15);
         initialResources.forEach(r => saveResource(r));
         setResources(initialResources);
       } else {
@@ -99,7 +103,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
 
-    // IP Fallback function
+    // IP Geolocation Fallback
     const fetchIPLocation = async () => {
       try {
         const res = await fetch('https://ipapi.co/json/');
@@ -113,29 +117,27 @@ export default function App() {
       }
     };
 
-    // Geolocation Resolution
+    // Live Geolocation Tracking
     let watchId: number | null = null;
     if ('geolocation' in navigator) {
-      // 1. Immediate high-accuracy position request
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           setUserLat(pos.coords.latitude);
           setUserLng(pos.coords.longitude);
         },
         (err) => {
-          console.warn('Direct GPS fix failed, falling back to IP:', err.message);
+          console.warn('GPS initial fix failed, attempting IP fallback:', err.message);
           fetchIPLocation();
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
 
-      // 2. Active continuous listener
       watchId = navigator.geolocation.watchPosition(
         (pos) => {
           setUserLat(pos.coords.latitude);
           setUserLng(pos.coords.longitude);
         },
-        (err) => console.warn('GPS continuous tracking error:', err.message),
+        (err) => console.warn('GPS tracking unavailable:', err.message),
         { enableHighAccuracy: true, timeout: 20000, maximumAge: 5000 }
       );
     } else {
@@ -182,7 +184,7 @@ export default function App() {
     let count = 0;
     simulationIntervalRef.current = window.setInterval(() => {
       count++;
-      const newInc = generateSimulatedIncident(DEFAULT_CENTER);
+      const newInc = generateSimulatedIncident(currentCenter as any);
       handleNewIncident(newInc);
       
       setSimulationEventsGenerated(count);
@@ -193,7 +195,7 @@ export default function App() {
         setIsSimulating(false);
       }
     }, SIMULATION_INTERVAL_MS);
-  }, [handleNewIncident]);
+  }, [handleNewIncident, currentCenter]);
 
   const handleStopSimulation = useCallback(() => {
     if (simulationIntervalRef.current) window.clearInterval(simulationIntervalRef.current);
@@ -204,12 +206,12 @@ export default function App() {
     handleStopSimulation();
     await clearAllData();
     setIncidents([]);
-    const initialResources = generateInitialResources(DEFAULT_CENTER, 15);
+    const initialResources = generateInitialResources(currentCenter as any, 15);
     initialResources.forEach(r => saveResource(r));
     setResources(initialResources);
     setMatches([]);
     setSelectedIncident(null);
-  }, [handleStopSimulation]);
+  }, [handleStopSimulation, currentCenter]);
 
   return (
     <div className="app-layout" style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden', backgroundColor: '#111827' }}>
@@ -236,6 +238,7 @@ export default function App() {
               onSelectIncident={setSelectedIncident}
               filters={filters}
               matches={matches}
+              userLocation={userLat !== null && userLng !== null ? [userLng, userLat] : null}
             />
             <MapControls 
               filters={filters}
