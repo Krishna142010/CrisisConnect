@@ -40,9 +40,15 @@ export async function getReverseGeocodedLocation(lat: number, lng: number): Prom
   }
 
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2500);
+
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14`
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14`,
+      { signal: controller.signal }
     );
+    clearTimeout(timeoutId);
+
     const data = await res.json();
     if (data && data.address) {
       const addr = data.address;
@@ -60,10 +66,10 @@ export async function getReverseGeocodedLocation(lat: number, lng: number): Prom
       return resolvedName;
     }
   } catch (e) {
-    console.warn('Reverse geocoding network error, using coordinate label:', e);
+    console.warn('Reverse geocode skipped/timeout:', e);
   }
 
-  const fallback = `Lat: ${lat.toFixed(3)}, Lng: ${lng.toFixed(3)}`;
+  const fallback = `Zone (${lat.toFixed(3)}, ${lng.toFixed(3)})`;
   locationNameCache.set(key, fallback);
   return fallback;
 }
